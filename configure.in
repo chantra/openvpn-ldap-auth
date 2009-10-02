@@ -1,0 +1,32 @@
+m4_define([openvpnldaprules_version_major],[0])
+m4_define([openvpnldaprules_version_minor],[0])
+m4_define([openvpnldaprules_version_micro],[1])
+m4_define([openvpnldaprules_version_extra],[beta1])
+m4_define([openvpnldaprules_version],[openvpnldaprules_version_major().openvpnldaprules_version_minor().openvpnldaprules_version_micro()openvpnldaprules_version_extra()])
+
+AC_INIT([OpenVPN LDAP Auth and Rules],[openvpnldaprules_version()],[chantra@debuntu.org],[openvpn-ldap-rules])
+AM_INIT_AUTOMAKE([1.9 foreign no-dist-gzip dist-bzip2])
+
+AC_CONFIG_SRCDIR([Makefile.am])
+AM_CONFIG_HEADER([config.h])
+
+AM_INIT_AUTOMAKE([$PACKAGE], [$VERSION])
+AC_CONFIG_MACRO_DIR([m4])
+AC_PROG_CC
+
+CFLAGS="${CFLAGS} -g -Wall -Werror -D_FILE_OFFSET_BITS=64"
+dnl avoid sqlite3 possibly lost... DSQLITE_THREADSAFE=0
+dnl CFLAGS="${CFLAGS} -DSQLITE_THREADSAFE=0"
+
+AC_SUBST(CFLAGS)
+AC_CHECK_HEADER([ldap.h],
+        [AC_CHECK_LIB(ldap, [ldap_initialize],[have_ldap="yes"],[have_ldap="no"],[-lldap])],
+        [have_ldap="no"])
+if ! test "x$have_ldap" = "xyes"; then
+    AC_MSG_ERROR("ldap headers not found")
+else
+    LIBS="${LIBS} -lldap"
+fi
+AC_PROG_INSTALL
+AC_OUTPUT( Makefile src/Makefile )
+

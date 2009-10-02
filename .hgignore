@@ -1,0 +1,17 @@
+syntax: glob
+
+*.o
+.*.swp
+*~
+openvpn-ldap-rules
+stamp-h1
+Makefile.in
+config.log
+config.status
+.deps
+autom4te.cache
+aclocal.m4
+Makefile
+configure
+config.h
+
