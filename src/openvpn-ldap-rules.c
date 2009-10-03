@@ -1,6 +1,26 @@
-
+/**
+ * vim: tabstop=2:shiftwidth=2:softtabstop=2:expandtab
+ * openvpn-ldap-rules.c
+ *
+ * Copyright (C) 2009 Emmanuel Bretelle <chantra@debuntu.org>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
 #include "debug.h"
 #include "defines.h"
+#include "utils.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -9,6 +29,24 @@
 #include <sys/types.h>
 
 
+#include <unistd.h>		/* getopt */
+#include <string.h>		/* strdup */
+#include <libgen.h>		/* basename */
+
+int debug = 0;
+#define printdebug( fmt, args... ) _printdebug( debug, fmt, ##args )
+
+void usage( char *prog ){
+	char *prg = strdup( prog );
+	char *name = basename( prog );
+	fprintf( stderr, "USAGE: %s [-h] [-d] [-H ldap_uri] [-Z]\n\
+\t-h:\tprint this help\n\
+\t-d:\tadd debugging info\n\
+\t-H:\tLdap server uri, default: %s\n\
+\t-Z:\tUse START_TLS\n", name, URI);
+	free( prg );
+}
+
 
 int
 main( int argc, char **argv){
@@ -16,11 +54,44 @@ main( int argc, char **argv){
 	int ldap_version = 3;
 	int ldap_tls_require_cert = LDAP_OPT_X_TLS_HARD;
 	int rc;
-	char username[] = "uid=chantra,ou=users,dc=example,dc=com";
-	char password[] = "foobarcode";
+	char *bind_user = NULL;
+	char *password = NULL;
 	struct berval bv, *bv2;
 
-	rc = ldap_initialize(&ldap, URI);
+	/* default values */
+	char		*ldap_uri = URI;
+	int			start_tls = TLSEnable; 
+
+	while ( ( rc = getopt ( argc, argv, "H:D:WZhdv" ) ) != - 1 ){
+		switch( rc ) {
+			case 'h':
+				usage( argv[0] );
+				return 0;
+			case 'H':
+				ldap_uri = optarg;
+				break;
+			case 'Z':
+				start_tls = 1;
+				break;
+			case 'D':
+				bind_user = optarg;
+				break;
+			case 'W':
+				password = get_passwd("Password: ");
+				/*printdebug( "Password is %s: length: %d\n", password, strlen(password) );*/
+				break;
+			case 'd':
+				debug = 1;
+				break;
+			case '?':
+				fprintf( stderr, "Unknwon Option -%c !!\n", optopt );
+				break;
+			default:
+				abort();
+		}
+	}
+
+	rc = ldap_initialize(&ldap, ldap_uri);
 	if( rc!= LDAP_SUCCESS ){
 		ERROR( "ERROR: ldap_initialize returned (%d) \"%s\" : %s\n", rc, ldap_err2string(rc), strerror(errno) );
 		return 1;
@@ -32,8 +103,8 @@ main( int argc, char **argv){
 		return 1;
 	}
 	
-	if( argc == 2 && strcmp( argv[1], "start_tls" ) == 0){
-		fprintf( stdout, "Starting TLS\n" );
+	if( start_tls == 1){
+		printdebug( "Starting TLS\n" );
 		ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
 		rc = ldap_set_option(ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, &ldap_tls_require_cert );
 		if( rc != LDAP_OPT_SUCCESS ){
@@ -46,13 +117,16 @@ main( int argc, char **argv){
 			return 2;
 		}
 	}
-	bv.bv_len = strlen(password);
-	bv.bv_val = password;
-	bv.bv_len = 0;
-	bv.bv_val = NULL;
-	fprintf(stderr, "%s", username );
+	if( password && strlen(password) ){
+		bv.bv_len = strlen(password);
+		bv.bv_val = password;
+	}else{
+		bv.bv_len = 0;
+		bv.bv_val = NULL;
+	}
+	printdebug("Connecting with user %s\n", bind_user ? bind_user : "NULL" );
 
-	rc = ldap_sasl_bind_s( ldap, NULL, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &bv2);
+	rc = ldap_sasl_bind_s( ldap, bind_user, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &bv2);
 	switch( rc ){
 		case LDAP_SUCCESS:
 			break;
@@ -60,7 +134,7 @@ main( int argc, char **argv){
 			WARN( "Invalid credentials" );
 			goto exit;
 		default:
-			WARN( "Unknown return value: %d/0x%2X", rc, rc );
+			WARN( "Unknown return value: %d/0x%2X %s", rc, rc, ldap_err2string( rc ) );
 			goto exit;
 	}
 	if( bv2 ){
@@ -105,14 +179,14 @@ main( int argc, char **argv){
 		WARN( "Search returned error: %s", ldap_err2string( rc ) );
 		goto exit;
 	}
-	rc = ldap_compare_ext_s( ldap, username, "givenname", &bv, NULL, NULL );
+	rc = ldap_compare_ext_s( ldap, bind_user, "givenname", &bv, NULL, NULL );
 	if( rc == LDAP_COMPARE_TRUE){
 		fprintf( stdout, "Found entry givenname\n" );
 	}
 exit:
+	if( password ) free( password );
 	rc = ldap_unbind_ext_s( ldap, NULL, NULL );
 	fprintf(stdout, "Unbind returned: %d\n", rc );
-
 	return 0;
 }
 
