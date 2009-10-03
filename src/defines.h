@@ -24,7 +24,8 @@
 #define TLSEnable			0
 
 #define BASEDN				"ou=users,dc=example,dc=com"
-#define SEARCH_FILTER	"(uid=chantra)"
+//#define SEARCH_FILTER	"(uid=chantra)"
+#define SEARCH_FILTER NULL
 
 #endif
  

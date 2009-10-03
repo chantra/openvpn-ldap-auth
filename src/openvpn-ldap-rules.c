@@ -57,6 +57,7 @@ main( int argc, char **argv){
 	char *bind_user = NULL;
 	char *password = NULL;
 	struct berval bv, *bv2;
+  char *filter = NULL;
 
 	/* default values */
 	char		*ldap_uri = URI;
@@ -90,6 +91,9 @@ main( int argc, char **argv){
 				abort();
 		}
 	}
+  if (optind < argc){
+    filter = argv[optind];
+  }
 
 	rc = ldap_initialize(&ldap, ldap_uri);
 	if( rc!= LDAP_SUCCESS ){
@@ -144,7 +148,11 @@ main( int argc, char **argv){
 
 
 	LDAPMessage *e, *result;
-	char *attrs[] = {"givenname","ovpnAllow", NULL};
+	char *attrs[] = {"cn", "givenname","ovpnAllow", NULL};
+  /*
+  char **attrs = NULL; -> returns all attributes
+  char *attrs[] = {"+", NULL} -> returns extended attributes like modifiername...
+  */
 	struct timeval timeout;
 	timeout.tv_sec = 15;
 	timeout.tv_usec = 0;
@@ -152,37 +160,46 @@ main( int argc, char **argv){
 	int i;
 	BerElement   *ber;
 	struct berval **vals;
-
-
-	rc = ldap_search_ext_s( ldap, BASEDN, LDAP_SCOPE_ONELEVEL, SEARCH_FILTER, attrs, 0, NULL, NULL, &timeout, 10, &result );
+  char          *dn;
+  printdebug("Filter %s\n",filter);
+	rc = ldap_search_ext_s( ldap, BASEDN, LDAP_SCOPE_ONELEVEL, filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
 	if( rc == LDAP_SUCCESS ){
 		fprintf(stdout, "Search returned success\n");
 		e = ldap_first_entry( ldap, result );
-		if ( e != NULL ) {
-			for ( a = ldap_first_attribute( ldap, e, &ber );
-							a != NULL; a = ldap_next_attribute( ldap, e, ber ) ) {
-				if ((vals = ldap_get_values_len( ldap, e, a)) != NULL ) {
-					for ( i = 0; vals[i] != NULL; i++ ) {
-						printf( "%s: %s\n", a, vals[i]->bv_val );
-					}
-					ldap_value_free_len( vals );
-				}
-				ldap_memfree( a );
-			}
-			if ( ber != NULL ) {
-				ber_free( ber, 0 );
-			}
-		}
-		ldap_msgfree( result );
+    do{
+      if ( e != NULL ) {
+        dn = ldap_get_dn( ldap, e );
+        fprintf( stdout, "DN: %s\n", dn );
+        for ( a = ldap_first_attribute( ldap, e, &ber );
+                a != NULL; a = ldap_next_attribute( ldap, e, ber ) ) {
+          if ((vals = ldap_get_values_len( ldap, e, a)) != NULL ) {
+            for ( i = 0; vals[i] != NULL; i++ ) {
+              printf( "%s: %s\n", a, vals[i]->bv_val );
+            }
+            ldap_value_free_len( vals );
+          }
+          ldap_memfree( a );
+        }
+        if ( dn != NULL ){
+          ldap_memfree( dn );
+        }
+        if ( ber != NULL ) {
+          ber_free( ber, 0 );
+        }
+      }
+    }while( ( e = ldap_next_entry( ldap, e ) ) );
+    ldap_msgfree( result );
 
 	}else{
 		WARN( "Search returned error: %s", ldap_err2string( rc ) );
 		goto exit;
 	}
+#if 0
 	rc = ldap_compare_ext_s( ldap, bind_user, "givenname", &bv, NULL, NULL );
 	if( rc == LDAP_COMPARE_TRUE){
 		fprintf( stdout, "Found entry givenname\n" );
 	}
+#endif
 exit:
 	if( password ) free( password );
 	rc = ldap_unbind_ext_s( ldap, NULL, NULL );
