@@ -44,5 +44,6 @@ extern int config_parse_file( const char *filename, config_t *c );
 
 extern config_t *config_new( void );
 extern void config_free( config_t *c );
-
+extern void config_dump( config_t *c);
+extern void config_set_default( config_t *c);
 #endif /* _CNF_H_ */

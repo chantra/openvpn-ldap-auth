@@ -47,7 +47,7 @@ void usage( char *prog ){
 \t-d:\tadd debugging info\n\
 \t-H:\tLdap server uri, default: %s\n\
 \t-D:\tBindDN, default: None\n\
-\t-Z:\tUse START_TLS\n", name, URI);
+\t-Z:\tUse START_TLS\n", name, OURI);
 	free( prg );
 }
 
@@ -55,10 +55,8 @@ void usage( char *prog ){
 int
 main( int argc, char **argv){
 	LDAP		*ldap;
-	int ldap_version = 3;
 	int ldap_tls_require_cert = LDAP_OPT_X_TLS_HARD;
 	int rc;
-	char *bind_user = NULL;
 	char *password = NULL;
   char *configfile = NULL;
   config_t  *config = NULL;
@@ -66,8 +64,7 @@ main( int argc, char **argv){
   char *filter = NULL;
 
 	/* default values */
-	char		*ldap_uri = URI;
-	int			start_tls = TLSEnable; 
+	int			start_tls = OTLSEnable; 
 
   config = config_new( );
 
@@ -77,13 +74,13 @@ main( int argc, char **argv){
 				usage( argv[0] );
 				return 0;
 			case 'H':
-				ldap_uri = optarg;
+				config->uri = strdup(optarg);
 				break;
 			case 'Z':
 				start_tls = 1;
 				break;
 			case 'D':
-				bind_user = optarg;
+				config->binddn = strdup(optarg);
 				break;
 			case 'W':
 				password = get_passwd("Password: ");
@@ -94,7 +91,6 @@ main( int argc, char **argv){
 				break;
       case 'c':
         configfile = optarg;
-        config_parse_file( optarg, config );
         break;
 			case '?':
 				fprintf( stderr, "Unknwon Option -%c !!\n", optopt );
@@ -106,14 +102,16 @@ main( int argc, char **argv){
   if (optind < argc){
     filter = argv[optind];
   }
-
-	rc = ldap_initialize(&ldap, ldap_uri);
+  if( configfile ) config_parse_file( optarg, config );
+  config_set_default( config );
+  config_dump( config );
+	rc = ldap_initialize(&ldap, config->uri);
 	if( rc!= LDAP_SUCCESS ){
 		ERROR( "ERROR: ldap_initialize returned (%d) \"%s\" : %s\n", rc, ldap_err2string(rc), strerror(errno) );
 		return 1;
 	}
 	
-	rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
+	rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->version));
 	if( rc != LDAP_OPT_SUCCESS ){
 		ERROR( "ERROR: ldap_set_option returned (%d) \"%s\"\n", rc, ldap_err2string(rc) );
 		return 1;
@@ -140,9 +138,9 @@ main( int argc, char **argv){
 		bv.bv_len = 0;
 		bv.bv_val = NULL;
 	}
-	printdebug("Connecting with user %s\n", bind_user ? bind_user : "NULL" );
+	printdebug("Connecting with user %s\n", config->binddn);
 
-	rc = ldap_sasl_bind_s( ldap, bind_user, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &bv2);
+	rc = ldap_sasl_bind_s( ldap, config->binddn, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &bv2);
 	switch( rc ){
 		case LDAP_SUCCESS:
 			break;
@@ -174,7 +172,7 @@ main( int argc, char **argv){
 	struct berval **vals;
   char          *dn;
   printdebug("Filter %s\n",filter);
-	rc = ldap_search_ext_s( ldap, BASEDN, LDAP_SCOPE_ONELEVEL, filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
+	rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
 	if( rc == LDAP_SUCCESS ){
 		fprintf(stdout, "Search returned success\n");
 		e = ldap_first_entry( ldap, result );

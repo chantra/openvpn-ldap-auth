@@ -20,6 +20,7 @@
  */
 
 #include "cnf.h"
+#include "defines.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -28,8 +29,27 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#define STRPRINT_IFSET(a,prefix) if(a) fprintf(stdout, "%s:\t%s\n", prefix, a);
+#define STRDUP_IFNOTSET(a,b) if(!a && b) a=strdup(b);
+//#define STRDUP_IFNOTSET_NOTNULL(a, b) if( b ) STRDUP_IFNOTSET(a,b)
+
 void check_and_free( void *d ){
 	if( d ) free( d );
+}
+
+void
+config_set_default( config_t *c){
+  if(OURI) STRDUP_IFNOTSET(c->uri, OURI );
+#ifdef OBASEDN
+  STRDUP_IFNOTSET(c->basedn, OBASEDN );
+#endif
+#ifdef OBINDDN
+  STRDUP_IFNOTSET(c->binddn, OBINDDN );
+#endif
+#ifdef OBINDPW
+  STRDUP_IFNOTSET(c->bindpw, OBINDPW);
+#endif
+  if(!c->version) c->version =  OLDAP_VERSION;
 }
 
 config_t *
@@ -79,19 +99,44 @@ f_readline( int fd ){
 }
 
 
+
 int
 config_parse_file( const char *filename, config_t *c ){
 	int fd;
 	char *line;
+  char *arg,*val;
 
 	fd = open( filename, O_RDONLY );
 	if( fd == -1 ){
 		return 1;
 	}
+  val = NULL;
 	while ( ( line = f_readline( fd ) ) ){
-		fprintf( stdout, "Read line: %s", line );
+    arg = strtok( line, "=" );
+    if(arg && *arg != '\n'){
+      val = strtok( NULL, "\n");
+      fprintf(stdout, "Found: %s/%s\n", arg, val );
+      if( !strcmp( arg, "uri" ) ){
+        c->uri = strdup( val );
+      } else if ( !strcmp( arg, "binddn" ) ) {
+        c->binddn = strdup( val );
+      }else if ( !strcmp( arg, "bindpw" ) ) {
+        STRDUP_IFNOTSET(c->bindpw, val );
+      }else if ( !strcmp( arg, "basedn" ) ){
+        STRDUP_IFNOTSET(c->basedn, val );
+      }
+    }
 		free( line );
 	}
 	close( fd );
+  config_dump( c );
 	return 0;
+}
+
+void
+config_dump( config_t *c){
+  STRPRINT_IFSET(c->uri,"URI");
+  STRPRINT_IFSET(c->basedn, "BaseDN");
+  STRPRINT_IFSET(c->binddn,"BindDN");
+  STRPRINT_IFSET(c->bindpw,"BindPW");
 }

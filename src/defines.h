@@ -20,12 +20,15 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#define URI						"ldap://localhost"
-#define TLSEnable			0
+#define OURI						"ldap://localhost"
+#define OLDAP_VERSION  3
+#define OTLSEnable			0
 
-#define BASEDN				"ou=users,dc=example,dc=com"
+#define OBASEDN				"ou=users,dc=example,dc=com"
+//#define OBINDDN        NULL
+//#define OBINDPW        NULL
 //#define SEARCH_FILTER	"(uid=chantra)"
-#define SEARCH_FILTER NULL
+#define OSEARCH_FILTER NULL
 
 #endif
  
