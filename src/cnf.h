@@ -1,6 +1,6 @@
 /**
  * vim: tabstop=2:shiftwidth=2:softtabstop=2:expandtab
- * utils.h
+ * cnf.h
  *
  * Copyright (C) 2009 Emmanuel Bretelle <chantra@debuntu.org>
  *
@@ -17,13 +17,32 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
- *
  */
 
-#ifndef _UITLS_H_
-#define _UTILS_H_
+#ifndef _CNF_H_
+#define _CNF_H_
 
-extern char *get_passwd( const char *prompt );
+typedef struct config{
+	char			*uri;
 
-#endif /* _UTILS_H_ */
+	char			*binddn;
+	char			*bindpw;
 
+	char			*basedn;
+	int				version;
+
+	int				start_tls;
+	char			*tls_cacertfile;
+	char			*tls_cacertdir;
+	char			*tls_certfile;
+	char			*tls_certkey;
+	char			*tls_ciphersuite;
+	char			*tls_reqcert;
+} config_t;
+
+extern int config_parse_file( const char *filename, config_t *c );
+
+extern config_t *config_new( void );
+extern void config_free( config_t *c );
+
+#endif /* _CNF_H_ */

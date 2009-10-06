@@ -20,12 +20,12 @@ dnl CFLAGS="${CFLAGS} -DSQLITE_THREADSAFE=0"
 
 AC_SUBST(CFLAGS)
 AC_CHECK_HEADER([ldap.h],
-        [AC_CHECK_LIB(ldap, [ldap_initialize],[have_ldap="yes"],[have_ldap="no"],[-lldap])],
+        [AC_CHECK_LIB(ldap, [ldap_initialize],[have_ldap="yes"],[have_ldap="no"],[-lldap_r])],
         [have_ldap="no"])
 if ! test "x$have_ldap" = "xyes"; then
     AC_MSG_ERROR("ldap headers not found")
 else
-    LIBS="${LIBS} -lldap"
+    LIBS="${LIBS} -lldap_r"
 fi
 AC_PROG_INSTALL
 AC_OUTPUT( Makefile src/Makefile )

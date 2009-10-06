@@ -21,6 +21,8 @@
 #include "debug.h"
 #include "defines.h"
 #include "utils.h"
+#include "cnf.h"
+
 
 #include <errno.h>
 #include <stdio.h>
@@ -39,10 +41,12 @@ int debug = 0;
 void usage( char *prog ){
 	char *prg = strdup( prog );
 	char *name = basename( prog );
-	fprintf( stderr, "USAGE: %s [-h] [-d] [-H ldap_uri] [-Z]\n\
+	fprintf( stderr, "USAGE: %s [-h] [-d] [-c configfile] [-D binddn] [-H ldap_uri] [-Z]\n\
 \t-h:\tprint this help\n\
+\t-c:\tconfig file\n\
 \t-d:\tadd debugging info\n\
 \t-H:\tLdap server uri, default: %s\n\
+\t-D:\tBindDN, default: None\n\
 \t-Z:\tUse START_TLS\n", name, URI);
 	free( prg );
 }
@@ -56,6 +60,8 @@ main( int argc, char **argv){
 	int rc;
 	char *bind_user = NULL;
 	char *password = NULL;
+  char *configfile = NULL;
+  config_t  *config = NULL;
 	struct berval bv, *bv2;
   char *filter = NULL;
 
@@ -63,7 +69,9 @@ main( int argc, char **argv){
 	char		*ldap_uri = URI;
 	int			start_tls = TLSEnable; 
 
-	while ( ( rc = getopt ( argc, argv, "H:D:WZhdv" ) ) != - 1 ){
+  config = config_new( );
+
+	while ( ( rc = getopt ( argc, argv, "H:D:c:WZhdv" ) ) != - 1 ){
 		switch( rc ) {
 			case 'h':
 				usage( argv[0] );
@@ -84,6 +92,10 @@ main( int argc, char **argv){
 			case 'd':
 				debug = 1;
 				break;
+      case 'c':
+        configfile = optarg;
+        config_parse_file( optarg, config );
+        break;
 			case '?':
 				fprintf( stderr, "Unknwon Option -%c !!\n", optopt );
 				break;
@@ -202,6 +214,7 @@ main( int argc, char **argv){
 #endif
 exit:
 	if( password ) free( password );
+  config_free( config );
 	rc = ldap_unbind_ext_s( ldap, NULL, NULL );
 	fprintf(stdout, "Unbind returned: %d\n", rc );
 	return 0;
