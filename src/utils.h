@@ -23,6 +23,18 @@
 #ifndef _UITLS_H_
 #define _UTILS_H_
 
+/*
+ *  Duplicates the string specified by the format-string [fmt].
+ *  Returns the new string, or NULL if out of memory.
+ *  The caller is responsible for freeing this new string.
+ */
+extern char *strdupf (const char *fmt, ...);
+
+/*
+ * Reads a password from stdin, the password is not echoed
+ * to stdout
+ */
+
 extern char *get_passwd( const char *prompt );
 
 #endif /* _UTILS_H_ */

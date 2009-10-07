@@ -25,8 +25,31 @@
 #include <string.h>
 #include <stdlib.h>
 #include <termios.h>
+#include <stdarg.h>
 
 #define BACKSPACE 127
+
+char *
+strdupf (const char *fmt, ...){
+  va_list  vargs;
+  char     buf[BUFSIZ];
+  char    *p;
+
+  if (!fmt) {
+    return (NULL);
+  }
+  va_start (vargs, fmt);
+  vsnprintf (buf, sizeof (buf), fmt, vargs);
+  va_end (vargs);
+
+  buf[sizeof (buf) - 1] = '\0';        /* ensure buf is NUL-terminated */
+
+  if (!(p = strdup (buf))) {
+    return (NULL);
+  }
+  return (p);
+}
+
 
 char *get_passwd( const char *prompt ){
 	struct termios old, new;
