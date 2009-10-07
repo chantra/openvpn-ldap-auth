@@ -39,7 +39,9 @@ void check_and_free( void *d ){
 
 void
 config_set_default( config_t *c){
+#ifdef OURI
   if(OURI) STRDUP_IFNOTSET(c->uri, OURI );
+#endif
 #ifdef OBASEDN
   STRDUP_IFNOTSET(c->basedn, OBASEDN );
 #endif
@@ -49,7 +51,31 @@ config_set_default( config_t *c){
 #ifdef OBINDPW
   STRDUP_IFNOTSET(c->bindpw, OBINDPW);
 #endif
-  if(!c->version) c->version =  OLDAP_VERSION;
+  if(!c->ldap_version) c->ldap_version =  OLDAP_VERSION;
+#ifdef OSEARCH_FILTER
+  STRDUP_IFNOTSET(c->search_filter, OSEARCH_FILTER );
+#endif
+#ifdef OSSL
+  STRDUP_IFNOTSET(c->ssl, OSSL );
+#endif
+#ifdef OTLS_CACERTFILE
+  STRDUP_IFNOTSET(c->tls_cacertfile, OTLS_CACERTFILE );
+#endif 
+#ifdef OTLS_CACERTDIR
+  STRDUP_IFNOTSET(c->tls_cacertdir, OTLS_CACERTDIR );
+#endif
+#ifdef OTLS_CERTFILE
+  STRDUP_IFNOTSET(c->tls_certfile, OTLS_CERTFILE );
+#endif
+#ifdef OTLS_CERTKEY
+  STRDUP_IFNOTSET(c->tls_certkey, OTLS_CERTKEY );
+#endif
+#ifdef OTLS_CIPHERSUITE
+  STRDUP_IFNOTSET(c->tls_ciphersuite, OTLS_CIPHERSUITE );
+#endif
+#ifdef OTLS_REQCERT
+  STRDUP_IFNOTSET(c->tls_reqcert, OTLS_REQCERT );
+#endif
 }
 
 config_t *
@@ -67,7 +93,9 @@ config_free( config_t *c ){
 	check_and_free( c->binddn );
 	check_and_free( c->bindpw );
 	check_and_free( c->basedn );
+  check_and_free( c->search_filter );
 	/* TLS */
+  check_and_free( c->ssl );
 	check_and_free( c->tls_cacertfile );
 	check_and_free( c->tls_cacertdir );
 	check_and_free( c->tls_certfile );
@@ -105,7 +133,6 @@ config_parse_file( const char *filename, config_t *c ){
 	int fd;
 	char *line;
   char *arg,*val;
-
 	fd = open( filename, O_RDONLY );
 	if( fd == -1 ){
 		return 1;
@@ -117,14 +144,33 @@ config_parse_file( const char *filename, config_t *c ){
       val = strtok( NULL, "\n");
       fprintf(stdout, "Found: %s/%s\n", arg, val );
       if( !strcmp( arg, "uri" ) ){
-        c->uri = strdup( val );
+        STRDUP_IFNOTSET(c->uri, val );
       } else if ( !strcmp( arg, "binddn" ) ) {
-        c->binddn = strdup( val );
+        STRDUP_IFNOTSET(c->binddn, val );
       }else if ( !strcmp( arg, "bindpw" ) ) {
         STRDUP_IFNOTSET(c->bindpw, val );
       }else if ( !strcmp( arg, "basedn" ) ){
         STRDUP_IFNOTSET(c->basedn, val );
+      }else if ( !strcmp( arg, "ldap_version" ) ){
+        c->ldap_version = atoi(val);
+      }else if ( !strcmp( arg, "search_filter" ) ){
+        STRDUP_IFNOTSET(c->search_filter, val );
+      }else if ( !strcmp( arg, "ssl" ) ){
+        STRDUP_IFNOTSET(c->ssl, val );        
+      }else if ( !strcmp( arg, "tls_cacertfile" ) ){
+        STRDUP_IFNOTSET(c->tls_cacertfile, val );
+      }else if ( !strcmp( arg, "tls_cacertdir" ) ){
+        STRDUP_IFNOTSET(c->tls_cacertdir, val );
+      }else if ( !strcmp( arg, "tls_certfile" ) ){
+        STRDUP_IFNOTSET(c->tls_certfile, val );
+      }else if ( !strcmp( arg, "tls_certkey" ) ){
+        STRDUP_IFNOTSET(c->tls_certkey, val );
+      }else if ( !strcmp( arg, "tls_ciphersuite" ) ){
+        STRDUP_IFNOTSET(c->tls_ciphersuite, val );
+      }else if ( !strcmp( arg, "tls_reqcert" ) ){
+        STRDUP_IFNOTSET(c->tls_reqcert, val );
       }
+
     }
 		free( line );
 	}

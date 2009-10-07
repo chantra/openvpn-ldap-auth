@@ -29,9 +29,11 @@ typedef struct config{
 	char			*bindpw;
 
 	char			*basedn;
-	int				version;
+	int				ldap_version;
 
-	int				start_tls;
+  char      *search_filter;
+
+	char			*ssl;
 	char			*tls_cacertfile;
 	char			*tls_cacertdir;
 	char			*tls_certfile;

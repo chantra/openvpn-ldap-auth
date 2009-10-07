@@ -41,9 +41,10 @@ int debug = 0;
 void usage( char *prog ){
 	char *prg = strdup( prog );
 	char *name = basename( prog );
-	fprintf( stderr, "USAGE: %s [-h] [-d] [-c configfile] [-D binddn] [-H ldap_uri] [-Z]\n\
+	fprintf( stderr, "USAGE: %s [-h] [-d] [-c configfile] [-D binddn] [-H ldap_uri] [-Z] [-f search_filter]\n\
 \t-h:\tprint this help\n\
 \t-c:\tconfig file\n\
+\t-f:\tsearch filter\n\
 \t-d:\tadd debugging info\n\
 \t-H:\tLdap server uri, default: %s\n\
 \t-D:\tBindDN, default: None\n\
@@ -57,18 +58,17 @@ main( int argc, char **argv){
 	LDAP		*ldap;
 	int ldap_tls_require_cert = LDAP_OPT_X_TLS_HARD;
 	int rc;
-	char *password = NULL;
   char *configfile = NULL;
+  char *username = NULL;
+  char *filter = NULL;
   config_t  *config = NULL;
 	struct berval bv, *bv2;
-  char *filter = NULL;
 
 	/* default values */
-	int			start_tls = OTLSEnable; 
 
   config = config_new( );
 
-	while ( ( rc = getopt ( argc, argv, "H:D:c:WZhdv" ) ) != - 1 ){
+	while ( ( rc = getopt ( argc, argv, ":H:D:c:b:f:WZhdv" ) ) != - 1 ){
 		switch( rc ) {
 			case 'h':
 				usage( argv[0] );
@@ -76,15 +76,21 @@ main( int argc, char **argv){
 			case 'H':
 				config->uri = strdup(optarg);
 				break;
+      case 'b':
+        config->basedn = strdup(optarg);
+        break;
+      case 'f':
+        config->search_filter = strdup(optarg);
+        break;
 			case 'Z':
-				start_tls = 1;
+				config->ssl = strdup("start_tls");
 				break;
 			case 'D':
 				config->binddn = strdup(optarg);
 				break;
 			case 'W':
-				password = get_passwd("Password: ");
-				/*printdebug( "Password is %s: length: %d\n", password, strlen(password) );*/
+				config->bindpw = get_passwd("Password: ");
+				printdebug( "Password is %s: length: %d\n", config->bindpw, strlen(config->bindpw) );
 				break;
 			case 'd':
 				debug = 1;
@@ -93,16 +99,20 @@ main( int argc, char **argv){
         configfile = optarg;
         break;
 			case '?':
-				fprintf( stderr, "Unknwon Option -%c !!\n", optopt );
+				fprintf( stderr, "Unknown Option -%c !!\n", optopt );
 				break;
+      case ':':
+        fprintf( stderr, "Missing argument for option -%c !!\n", optopt );
+        break;
 			default:
+        fprintf(stderr, "?? getopt returned character code 0%o ??\n", rc);
 				abort();
 		}
 	}
   if (optind < argc){
-    filter = argv[optind];
+    username = strdup(argv[optind]);
   }
-  if( configfile ) config_parse_file( optarg, config );
+  if( configfile ) config_parse_file( configfile, config );
   config_set_default( config );
   config_dump( config );
 	rc = ldap_initialize(&ldap, config->uri);
@@ -111,14 +121,13 @@ main( int argc, char **argv){
 		return 1;
 	}
 	
-	rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->version));
+	rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap_version));
 	if( rc != LDAP_OPT_SUCCESS ){
 		ERROR( "ERROR: ldap_set_option returned (%d) \"%s\"\n", rc, ldap_err2string(rc) );
 		return 1;
 	}
 	
-	if( start_tls == 1){
-		printdebug( "Starting TLS\n" );
+	if( strcmp( config->ssl, "start_tls" ) == 0){
 		ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
 		rc = ldap_set_option(ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, &ldap_tls_require_cert );
 		if( rc != LDAP_OPT_SUCCESS ){
@@ -131,9 +140,9 @@ main( int argc, char **argv){
 			return 2;
 		}
 	}
-	if( password && strlen(password) ){
-		bv.bv_len = strlen(password);
-		bv.bv_val = password;
+	if( config->bindpw && strlen(config->bindpw) ){
+		bv.bv_len = strlen(config->bindpw);
+		bv.bv_val = config->bindpw;
 	}else{
 		bv.bv_len = 0;
 		bv.bv_val = NULL;
@@ -171,13 +180,16 @@ main( int argc, char **argv){
 	BerElement   *ber;
 	struct berval **vals;
   char          *dn;
-  printdebug("Filter %s\n",filter);
+  if( username && config->search_filter ){
+    filter = str_replace(config->search_filter, "%u", username );
+  }
+  printdebug("search Filter %s\nFinal filter: %s\n",config->search_filter, filter);
 	rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
 	if( rc == LDAP_SUCCESS ){
 		fprintf(stdout, "Search returned success\n");
 		e = ldap_first_entry( ldap, result );
-    do{
-      if ( e != NULL ) {
+    if ( e != NULL ) {
+      do{
         dn = ldap_get_dn( ldap, e );
         fprintf( stdout, "DN: %s\n", dn );
         for ( a = ldap_first_attribute( ldap, e, &ber );
@@ -196,8 +208,8 @@ main( int argc, char **argv){
         if ( ber != NULL ) {
           ber_free( ber, 0 );
         }
-      }
-    }while( ( e = ldap_next_entry( ldap, e ) ) );
+      }while( ( e = ldap_next_entry( ldap, e ) ) );
+    }
     ldap_msgfree( result );
 
 	}else{
@@ -211,7 +223,7 @@ main( int argc, char **argv){
 	}
 #endif
 exit:
-	if( password ) free( password );
+  if( filter ) free( filter );
   config_free( config );
 	rc = ldap_unbind_ext_s( ldap, NULL, NULL );
 	fprintf(stdout, "Unbind returned: %d\n", rc );

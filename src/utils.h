@@ -30,6 +30,13 @@
  */
 extern char *strdupf (const char *fmt, ...);
 
+
+/*
+ * Create a new string with [substr] being replaced by [replacement] in [string]
+ * Returns the new string, or NULL if out of memory.
+ * The caller is responsible for freeing this new string.
+ */
+extern char *str_replace( const char *string, const char *substr, const char *replacement );
 /*
  * Reads a password from stdin, the password is not echoed
  * to stdout
