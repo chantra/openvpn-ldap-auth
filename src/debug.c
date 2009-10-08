@@ -54,6 +54,7 @@ void _warn( const char *file, int line, const char *func, const char *fmt, ... )
   fprintf( stderr, "\n" );
 }
 
+
 void _error( const char *file, int line, const char *func, const char *fmt, ... ){
   va_list argp;
   fprintf( stderr, "ERROR: %s:%d %s() ", file, line, func );
@@ -61,6 +62,22 @@ void _error( const char *file, int line, const char *func, const char *fmt, ... 
   vfprintf( stderr, fmt, argp );
   va_end( argp );
   fprintf( stderr, "\n" );
+}
+
+void _logwarning( const char *fmt, ... ){
+  va_list argp;
+  fprintf( stderr, "AUTH-LDAP: [WARN] ");
+  va_start( argp, fmt );
+  vfprintf( stderr, fmt, argp );
+  va_end( argp );
+}
+
+void _logerror( const char *fmt, ... ){
+  va_list argp;
+  fprintf( stderr, "AUTH-LDAP: [ERROR] ");
+  va_start( argp, fmt );
+  vfprintf( stderr, fmt, argp );
+  va_end( argp );
 }
 
 

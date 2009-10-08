@@ -76,6 +76,10 @@ config_set_default( config_t *c){
 #ifdef OTLS_REQCERT
   STRDUP_IFNOTSET(c->tls_reqcert, OTLS_REQCERT );
 #endif
+#ifdef OTIMEOUT
+  if( !c->timeout ) c->timeout = OTIMEOUT;
+#endif
+
 }
 
 config_t *
@@ -142,7 +146,6 @@ config_parse_file( const char *filename, config_t *c ){
     arg = strtok( line, "=" );
     if(arg && *arg != '\n'){
       val = strtok( NULL, "\n");
-      fprintf(stdout, "Found: %s/%s\n", arg, val );
       if( !strcmp( arg, "uri" ) ){
         STRDUP_IFNOTSET(c->uri, val );
       } else if ( !strcmp( arg, "binddn" ) ) {
@@ -152,7 +155,7 @@ config_parse_file( const char *filename, config_t *c ){
       }else if ( !strcmp( arg, "basedn" ) ){
         STRDUP_IFNOTSET(c->basedn, val );
       }else if ( !strcmp( arg, "ldap_version" ) ){
-        c->ldap_version = atoi(val);
+        if(!c->ldap_version) c->ldap_version = atoi(val);
       }else if ( !strcmp( arg, "search_filter" ) ){
         STRDUP_IFNOTSET(c->search_filter, val );
       }else if ( !strcmp( arg, "ssl" ) ){
@@ -169,13 +172,14 @@ config_parse_file( const char *filename, config_t *c ){
         STRDUP_IFNOTSET(c->tls_ciphersuite, val );
       }else if ( !strcmp( arg, "tls_reqcert" ) ){
         STRDUP_IFNOTSET(c->tls_reqcert, val );
+      }else if( !strcmp( arg, "timeout" ) ){
+        if( !c->timeout ) c->timeout = atoi(val);
       }
 
     }
 		free( line );
 	}
 	close( fd );
-  config_dump( c );
 	return 0;
 }
 
@@ -184,5 +188,6 @@ config_dump( config_t *c){
   STRPRINT_IFSET(c->uri,"URI");
   STRPRINT_IFSET(c->basedn, "BaseDN");
   STRPRINT_IFSET(c->binddn,"BindDN");
-  STRPRINT_IFSET(c->bindpw,"BindPW");
+  /* STRPRINT_IFSET(c->bindpw,"BindPW"); */
+  /* TODO finish dumping info */
 }

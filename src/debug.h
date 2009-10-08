@@ -37,9 +37,14 @@ void _warn( const char *file, int line, const char *func, const char *fmt, ... )
 void _error( const char *file, int line, const char *func, const char *fmt, ... );
 #define ERROR( fmt, args... ) _error( __FILE__, __LINE__, __FUNCTION__, fmt, ##args )
 
-
 void _debug( int level, const char *file, int line, const char *func, const char *fmt, ... );
 #define DEBUG( level, fmt, args... ) _debug( level, __FILE__, __LINE__, __FUNCTION__, fmt, ##args )
+
+void _logerror( const char *fmt, ... );
+#define LOGERROR( fmt, args... ) _logerror( fmt, ##args )
+
+void _logwarning( const char *fmt, ... );
+#define LOGWARNING( fmt, args... ) _logwarning( fmt, ##args )
 
 #endif /* _DEBUG_H_ */
 

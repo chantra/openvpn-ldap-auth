@@ -1,6 +1,10 @@
 syntax: glob
 
 *.o
+*.lo
+*.so
+*.la
+*.a
 .*.swp
 *~
 openvpn-ldap-rules
@@ -9,9 +13,12 @@ Makefile.in
 config.log
 config.status
 .deps
+.libs
 autom4te.cache
 aclocal.m4
 Makefile
 configure
 config.h
+testplugin
+
 

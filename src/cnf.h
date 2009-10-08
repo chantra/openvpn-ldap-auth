@@ -40,6 +40,7 @@ typedef struct config{
 	char			*tls_certkey;
 	char			*tls_ciphersuite;
 	char			*tls_reqcert;
+  int       timeout;
 } config_t;
 
 extern int config_parse_file( const char *filename, config_t *c );

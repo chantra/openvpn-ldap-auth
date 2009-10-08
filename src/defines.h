@@ -35,5 +35,7 @@
 //#define OTLS_CERTKEY
 //#define OTLS_CIPHERSUITE
 #define OTLS_REQCERT  "never"
+#define OTIMEOUT  15
+
 #endif
  
