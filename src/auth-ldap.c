@@ -373,10 +373,10 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
    * Get verbosity level from environment
    */
   
-    const char *verb_string = get_env ("verb", envp);
-    if (verb_string)
-      context->verb = atoi (verb_string);
-  
+  const char *verb_string = get_env ("verb", envp);
+  if (verb_string)
+    context->verb = atoi (verb_string);
+
 
 
   return (openvpn_plugin_handle_t) context;
@@ -413,24 +413,35 @@ ldap_binddn( LDAP *ldap, char *username, char *password ){
  * Set up a connection to LDAP given the context configuration
  */
 LDAP *
-connect_ldap( ldap_context_t *context, int bind ){
+connect_ldap( ldap_context_t *context ){
   LDAP *ldap;
   int rc;
   config_t *config = context->config;
   int ldap_tls_require_cert;
   struct berval bv, *bv2;
+  struct timeval timeout;
 
   /* init connection to ldap */
   rc = ldap_initialize(&ldap, config->uri);
   if( rc!= LDAP_SUCCESS ){
     LOGERROR( "ldap_initialize returned (%d) \"%s\" : %s\n", rc, ldap_err2string(rc), strerror(errno) );
-    return NULL;
+    goto connect_ldap_error;
   }
+  /* Version */
   rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap_version));
   if( rc != LDAP_OPT_SUCCESS ){
     LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"\n", config->ldap_version, rc, ldap_err2string(rc) );
     goto connect_ldap_error;
   }
+  /* Timeout */
+  timeout.tv_sec = config->timeout;
+  timeout.tv_usec = 0;
+  rc = ldap_set_option(ldap, LDAP_OPT_NETWORK_TIMEOUT, &timeout );
+  if( rc != LDAP_OPT_SUCCESS ){
+    LOGERROR( "ldap_set_option timeout %ds returned (%d) \"%s\"\n", config->timeout, rc, ldap_err2string(rc) );
+    goto connect_ldap_error;
+  }
+  /* SSL/TLS */
   if( strcmp( config->ssl, "start_tls" ) == 0){
     /*TODO handle certif properly */
     ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
@@ -447,11 +458,13 @@ connect_ldap( ldap_context_t *context, int bind ){
       LOGWARNING( "ldap_start_tls_s TLS context already exist\n" );
     }
   }
+#if 0
   if( bind ){
-    rc = ldap_binddn( ldap, config->binddn, config->bindpw );
     if (DODEBUG (context->verb))
       fprintf( stderr, "AUTH-LDAP: LDAP binding with user %s\n", (config->binddn ? config->binddn: "Anonymous" ) );
-  /*
+    
+    rc = ldap_binddn( ldap, config->binddn, config->bindpw );
+/** made redundant per ldap_binddn function
     if( config->bindpw && strlen(config->bindpw) ){
       bv.bv_len = strlen(config->bindpw);
       bv.bv_val = config->bindpw;
@@ -460,7 +473,7 @@ connect_ldap( ldap_context_t *context, int bind ){
       bv.bv_val = NULL;
     }
     rc = ldap_sasl_bind_s( ldap, config->binddn, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &bv2);
-  */
+*/  
     switch( rc ){
       case LDAP_SUCCESS:
         if( DODEBUG( context->verb ) )
@@ -473,7 +486,9 @@ connect_ldap( ldap_context_t *context, int bind ){
         LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
         goto connect_ldap_error;
     }
+    
   }
+#endif
   return ldap;
 
 connect_ldap_error:
@@ -494,7 +509,6 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
   char *search_filter = NULL;
   struct timeval timeout;
-  int r = OPENVPN_PLUGIN_FUNC_ERROR;
 
   if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY && context && context->config ){
     /* get username/password from envp string array */
@@ -510,16 +524,29 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
           fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s\n", username );
         #endif
       }
-      ldap = connect_ldap( context, 1 );
+      ldap = connect_ldap( context );
       if( ldap == NULL ){
+        LOGERROR( "AUTH-LDAP: Could not connect to URI %s\n", config->uri );
         return OPENVPN_PLUGIN_FUNC_ERROR;        
+      }
+      
+      rc = ldap_binddn( ldap, config->binddn, config->bindpw );
+      switch( rc ){
+        case LDAP_SUCCESS:
+          if( DODEBUG( context->verb ) )
+            LOGINFO( "ldap_sasl_bind_s %s success\n", config->binddn ? config->binddn : "Anonymous" );
+          break;
+        case LDAP_INVALID_CREDENTIALS:
+          LOGERROR( "ldap_binddn: Invalid Credentials\n" );
+          goto func_v1_exit;
+        default:
+          LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
+          goto func_v1_exit;
       }
       /* Search username DN */
       timeout.tv_sec = config->timeout;
       timeout.tv_usec = 0;
       char *attrs[] = { NULL };
-      BerElement   *ber;
-      struct berval **vals;
       char          *dn = NULL;
       LDAPMessage *e, *result;
  
@@ -527,20 +554,26 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
         search_filter = str_replace(config->search_filter, "%u", username );
       }
       if( DODEBUG( context->verb ) )
-        fprintf(stderr, "AUTH-LDAP: searching user using filter %s with basedn: %s\n", search_filter, config->basedn );
+        LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->basedn );
 
       rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
       if( rc == LDAP_SUCCESS ){
-        if( ldap_count_entries( ldap, result ) != 1 ){
+        /* Check how many entries were found. Only one should be returned */
+        int nbrow = ldap_count_entries( ldap, result );
+        if( nbrow > 1 ){
           LOGERROR( "ldap_search_ext_s returned %d results, only 1 is supported\n", ldap_count_entries( ldap, result ) );
-        }else{
+        }else if( nbrow == 0 ){
+          LOGWARNING( "ldap_search_ext_s: unknown user %s\n", username );
+        }else if( nbrow == 1 ){
+          /* get the first entry (and only) */
           e =  ldap_first_entry( ldap, result );
           if( e != NULL ){
             dn = ldap_get_dn( ldap, e );
             if( DODEBUG( context->verb ) )
-              fprintf(stderr, "AUTH-LDAP: found dn: %s\n", dn );
+              LOGINFO("found dn: %s\n", dn );
             /*
             * we found the user DN, lets unbind and rebind with new DN 
+            * not sure this is needed.
             */
             /*
             ldap_unbind_ext_s( ldap, NULL, NULL);
@@ -548,21 +581,20 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
             */
             rc = ldap_binddn( ldap, dn, password );
             if( rc != LDAP_SUCCESS ){
-              LOGERROR( "rebinding: ldap_unbind_ext_s: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-              ldap_memfree( dn );
-              goto func_v1_exit_free;
+              LOGERROR( "rebinding: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
             }else{
+              /* success, let set our return value to SUCCESS */
               res = OPENVPN_PLUGIN_FUNC_SUCCESS;
             }
-             
+          }else{
+            LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
           }
         }
+        /* free the returned result */
         ldap_msgfree( result );
       }
+      /* finally, if a DN was returned, free it */
       if( dn ) ldap_memfree( dn );
-      if( search_filter ) free( search_filter );
-      rc = ldap_unbind_ext_s( ldap, NULL, NULL );
-      return res;
     }
   }
 func_v1_exit:
@@ -572,7 +604,7 @@ func_v1_exit:
   }
 func_v1_exit_free:
   if( search_filter ) free( search_filter );
-  return OPENVPN_PLUGIN_FUNC_ERROR;
+  return res;
 }
 
 OPENVPN_EXPORT void
@@ -581,7 +613,7 @@ openvpn_plugin_close_v1 (openvpn_plugin_handle_t handle)
   ldap_context_t *context = (ldap_context_t *) handle;
 
   if (DODEBUG (context->verb))
-    fprintf (stderr, "AUTH-LDAP: close\n");
+    LOGINFO( "close\n" );
 
   ldap_context_free( context );
 }
@@ -591,7 +623,7 @@ openvpn_plugin_abort_v1 (openvpn_plugin_handle_t handle)
 {
   ldap_context_t *context = (ldap_context_t *) handle;
   if (DODEBUG (context->verb))
-    fprintf (stderr, "AUTH-LDAP: abort\n");
+    LOGINFO( "abort\n" );
   ldap_context_free( context );
 }
 

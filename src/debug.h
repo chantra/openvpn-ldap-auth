@@ -40,11 +40,13 @@ void _error( const char *file, int line, const char *func, const char *fmt, ... 
 void _debug( int level, const char *file, int line, const char *func, const char *fmt, ... );
 #define DEBUG( level, fmt, args... ) _debug( level, __FILE__, __LINE__, __FUNCTION__, fmt, ##args )
 
-void _logerror( const char *fmt, ... );
-#define LOGERROR( fmt, args... ) _logerror( fmt, ##args )
+void _log( const char *level, const char *fmt, ... );
 
-void _logwarning( const char *fmt, ... );
-#define LOGWARNING( fmt, args... ) _logwarning( fmt, ##args )
+#define LOGERROR( fmt, args... ) _log( "ERROR", fmt, ##args )
+
+#define LOGWARNING( fmt, args... ) _log( "WARNING", fmt, ##args )
+
+#define LOGINFO( fmt, args... ) _log( "INFO", fmt, ##args )
 
 #endif /* _DEBUG_H_ */
 

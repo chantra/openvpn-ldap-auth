@@ -1,4 +1,4 @@
-
+#ACLOCAL_AMFLAGS = -I m4 $(ACLOCAL_AMFLAGS)
 #bin_PROGRAMS = openvpn-ldap-rules
 #lib_LIBRARIES = openvpn-auth-ldap.a
 lib_LTLIBRARIES = libopenvpn-auth-ldap.la

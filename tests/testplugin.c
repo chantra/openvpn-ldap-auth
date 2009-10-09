@@ -55,7 +55,7 @@ int main(int argc, const char *argv[]) {
   pid_t pid = getpid();
   char command[100];
 
-
+  
 	/* Grab username and password */
 	printf("Username: ");
 	fgets(username, sizeof(username), stdin);
@@ -84,12 +84,15 @@ int main(int argc, const char *argv[]) {
 		errx(1, "Initialization Failed!\n");
 
 	/* Authenticate */
-	err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp);
-	if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
-		printf("Authorization Failed!\n");
-	} else {
-		printf("Authorization Succeed!\n");
-	}
+  int loop = 1;
+  for( ; loop; --loop ){
+    err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp);
+    if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
+      printf("Authorization Failed!\n");
+    } else {
+      printf("Authorization Succeed!\n");
+    }
+  }
   goto free_exit;
 	/* Client Connect */
 	err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_CLIENT_CONNECT, argv, envp);

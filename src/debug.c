@@ -64,20 +64,13 @@ void _error( const char *file, int line, const char *func, const char *fmt, ... 
   fprintf( stderr, "\n" );
 }
 
-void _logwarning( const char *fmt, ... ){
+void _log( const char *level, const char *fmt, ... ){
   va_list argp;
-  fprintf( stderr, "AUTH-LDAP: [WARN] ");
+  fprintf( stderr, "AUTH-LDAP: [%s] ", level);
   va_start( argp, fmt );
   vfprintf( stderr, fmt, argp );
   va_end( argp );
 }
 
-void _logerror( const char *fmt, ... ){
-  va_list argp;
-  fprintf( stderr, "AUTH-LDAP: [ERROR] ");
-  va_start( argp, fmt );
-  vfprintf( stderr, fmt, argp );
-  va_end( argp );
-}
 
 
