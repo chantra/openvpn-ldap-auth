@@ -79,7 +79,12 @@ config_set_default( config_t *c){
 #ifdef OTIMEOUT
   if( !c->timeout ) c->timeout = OTIMEOUT;
 #endif
-
+#ifdef OGROUPDN
+  STRDUP_IFNOTSET(c->groupdn, OGROUPDN );
+#endif
+#ifdef OMEMBER_ATRIBUTE
+  STRDUP_IFNOTSET(c->member_attribute, OMEMBER_ATRIBUTE );
+#endif
 }
 
 config_t *
@@ -106,6 +111,8 @@ config_free( config_t *c ){
 	check_and_free( c->tls_certkey );
 	check_and_free( c->tls_ciphersuite );
 	check_and_free( c->tls_reqcert );
+  check_and_free( c->groupdn );
+  check_and_free( c->member_attribute );
 	free( c );
 }
 
@@ -174,6 +181,10 @@ config_parse_file( const char *filename, config_t *c ){
         STRDUP_IFNOTSET(c->tls_reqcert, val );
       }else if( !strcmp( arg, "timeout" ) ){
         if( !c->timeout ) c->timeout = atoi(val);
+      }else if( !strcmp( arg, "groupdn" ) ){
+        STRDUP_IFNOTSET(c->groupdn, val );
+      }else if( !strcmp( arg, "member_attribute" ) ){
+        STRDUP_IFNOTSET(c->member_attribute, val );
       }
 
     }
@@ -188,6 +199,8 @@ config_dump( config_t *c){
   STRPRINT_IFSET(c->uri,"URI");
   STRPRINT_IFSET(c->basedn, "BaseDN");
   STRPRINT_IFSET(c->binddn,"BindDN");
+  STRPRINT_IFSET(c->groupdn,"GroupDN");
+  STRPRINT_IFSET(c->member_attribute,"Member Attribute");
   /* STRPRINT_IFSET(c->bindpw,"BindPW"); */
   /* TODO finish dumping info */
 }

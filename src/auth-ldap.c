@@ -377,6 +377,8 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   if (verb_string)
     context->verb = atoi (verb_string);
 
+  if( DODEBUG( context->verb ) )
+      config_dump( context->config ); 
 
 
   return (openvpn_plugin_handle_t) context;
@@ -396,7 +398,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
 int
 ldap_binddn( LDAP *ldap, char *username, char *password ){
   int rc;
-  struct berval bv, *bv2;
+  struct berval bv, *servcred = NULL;
 
   if( password && strlen(password) ){
     bv.bv_len = strlen(password);
@@ -405,12 +407,14 @@ ldap_binddn( LDAP *ldap, char *username, char *password ){
     bv.bv_len = 0;
     bv.bv_val = NULL;
   }
-  rc = ldap_sasl_bind_s( ldap, username, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &bv2);
+  rc = ldap_sasl_bind_s( ldap, username, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &servcred);
+  if( servcred ) ber_bvfree( servcred );
   return rc;
 }
 
 /**
  * Set up a connection to LDAP given the context configuration
+ * Do not bind to LDAP, use ldap_bindn for that purpose
  */
 LDAP *
 connect_ldap( ldap_context_t *context ){
@@ -499,6 +503,69 @@ connect_ldap_error:
   return NULL;
 }
 
+
+/**
+ * Search for a user's DN
+ * Given a search_filter and context, will search for 
+ */
+char *
+ldap_find_user( LDAP *ldap, ldap_context_t *context, char *username ){
+  struct timeval timeout;
+  char *attrs[] = { NULL };
+  char          *dn = NULL;
+  LDAPMessage *e, *result;
+  config_t *config = NULL;
+  char *search_filter = NULL;
+  int rc;
+  char *userdn = NULL;
+
+  /* arguments sanity check */
+  if( !context || !username || !ldap){
+    LOGERROR("ldap_find_user missing required parameter\n");
+    return NULL;
+  }
+  config = context->config;
+  
+  /* initialise timeout values */
+  timeout.tv_sec = config->timeout;
+  timeout.tv_usec = 0;
+  if( username && config->search_filter ){
+    search_filter = str_replace(config->search_filter, "%u", username );
+  }
+  if( DODEBUG( context->verb ) )
+    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->basedn );
+
+  rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
+  if( rc == LDAP_SUCCESS ){
+    /* Check how many entries were found. Only one should be returned */
+    int nbrow = ldap_count_entries( ldap, result );
+    if( nbrow > 1 ){
+      LOGERROR( "ldap_search_ext_s returned %d results, only 1 is supported\n", ldap_count_entries( ldap, result ) );
+    }else if( nbrow == 0 ){
+      LOGWARNING( "ldap_search_ext_s: unknown user %s\n", username );
+    }else if( nbrow == 1 ){
+      /* get the first entry (and only) */
+      e =  ldap_first_entry( ldap, result );
+      if( e != NULL ){
+        dn = ldap_get_dn( ldap, e );
+        if( DODEBUG( context->verb ) )
+          LOGINFO("found dn: %s\n", dn );
+      }else{
+        LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
+      }
+    }
+    /* free the returned result */
+    ldap_msgfree( result );
+  }
+  if( dn ){
+    userdn = strdup( dn );
+    /* finally, if a DN was returned, free it */
+    if( dn ) ldap_memfree( dn );
+  }
+  if( search_filter ) free( search_filter );
+  return userdn;
+}
+
 OPENVPN_EXPORT int
 openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const char *argv[], const char *envp[])
 {
@@ -507,15 +574,49 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   LDAP *ldap = NULL;
   int rc;
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
-  char *search_filter = NULL;
-  struct timeval timeout;
+  char *userdn = NULL;
+  /* get username/password from envp string array */
+  const char *username = get_env ("username", envp);
+  const char *password = get_env ("password", envp);
+  const char *ip = get_env ("ifconfig_pool_remote_ip", envp );
+
+
+  /* required parameters check */
+  if (!username){
+    LOGERROR("No username supplied to OpenVPN plugin");
+    return OPENVPN_PLUGIN_FUNC_ERROR;
+  }
+  
+  /* Connection to LDAP backend */
+  ldap = connect_ldap( context );
+  if( ldap == NULL ){
+    LOGERROR( "Could not connect to URI %s\n", config->uri );
+    return OPENVPN_PLUGIN_FUNC_ERROR;        
+  }
+  /* bind to LDAP server anonymous or authenticated */
+  rc = ldap_binddn( ldap, config->binddn, config->bindpw );
+  switch( rc ){
+    case LDAP_SUCCESS:
+      if( DODEBUG( context->verb ) )
+        LOGINFO( "ldap_sasl_bind_s %s success\n", config->binddn ? config->binddn : "Anonymous" );
+      break;
+    case LDAP_INVALID_CREDENTIALS:
+      LOGERROR( "ldap_binddn: Invalid Credentials\n" );
+      goto func_v1_exit;
+    default:
+      LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
+      goto func_v1_exit;
+  }
+
+  userdn = ldap_find_user( ldap, context, username );
+  if( !userdn ){
+    LOGWARNING( "LDAP user *%s* was not found \n", username );
+    goto func_v1_exit;
+  }
+  
 
   if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY && context && context->config ){
-    /* get username/password from envp string array */
-    const char *username = get_env ("username", envp);
-    const char *password = get_env ("password", envp);
-
-    if (username && strlen (username) > 0 && password){
+      if (username && strlen (username) > 0 && password){
       /** TODO authenticate user */
       if (DODEBUG (context->verb)) {
         #if 0
@@ -524,77 +625,16 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
           fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s\n", username );
         #endif
       }
-      ldap = connect_ldap( context );
-      if( ldap == NULL ){
-        LOGERROR( "AUTH-LDAP: Could not connect to URI %s\n", config->uri );
-        return OPENVPN_PLUGIN_FUNC_ERROR;        
+     
+      rc = ldap_binddn( ldap, userdn, password );
+      if( rc != LDAP_SUCCESS ){
+        LOGERROR( "rebinding: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
+      }else{
+        /* success, let set our return value to SUCCESS */
+        if( DODEBUG( context->verb ) )
+          LOGINFO( "User *%s* successfully authenticate\n", username );
+        res = OPENVPN_PLUGIN_FUNC_SUCCESS;
       }
-      
-      rc = ldap_binddn( ldap, config->binddn, config->bindpw );
-      switch( rc ){
-        case LDAP_SUCCESS:
-          if( DODEBUG( context->verb ) )
-            LOGINFO( "ldap_sasl_bind_s %s success\n", config->binddn ? config->binddn : "Anonymous" );
-          break;
-        case LDAP_INVALID_CREDENTIALS:
-          LOGERROR( "ldap_binddn: Invalid Credentials\n" );
-          goto func_v1_exit;
-        default:
-          LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-          goto func_v1_exit;
-      }
-      /* Search username DN */
-      timeout.tv_sec = config->timeout;
-      timeout.tv_usec = 0;
-      char *attrs[] = { NULL };
-      char          *dn = NULL;
-      LDAPMessage *e, *result;
- 
-      if( username && config->search_filter ){
-        search_filter = str_replace(config->search_filter, "%u", username );
-      }
-      if( DODEBUG( context->verb ) )
-        LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->basedn );
-
-      rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
-      if( rc == LDAP_SUCCESS ){
-        /* Check how many entries were found. Only one should be returned */
-        int nbrow = ldap_count_entries( ldap, result );
-        if( nbrow > 1 ){
-          LOGERROR( "ldap_search_ext_s returned %d results, only 1 is supported\n", ldap_count_entries( ldap, result ) );
-        }else if( nbrow == 0 ){
-          LOGWARNING( "ldap_search_ext_s: unknown user %s\n", username );
-        }else if( nbrow == 1 ){
-          /* get the first entry (and only) */
-          e =  ldap_first_entry( ldap, result );
-          if( e != NULL ){
-            dn = ldap_get_dn( ldap, e );
-            if( DODEBUG( context->verb ) )
-              LOGINFO("found dn: %s\n", dn );
-            /*
-            * we found the user DN, lets unbind and rebind with new DN 
-            * not sure this is needed.
-            */
-            /*
-            ldap_unbind_ext_s( ldap, NULL, NULL);
-            ldap = connect_ldap( context, 0 );
-            */
-            rc = ldap_binddn( ldap, dn, password );
-            if( rc != LDAP_SUCCESS ){
-              LOGERROR( "rebinding: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-            }else{
-              /* success, let set our return value to SUCCESS */
-              res = OPENVPN_PLUGIN_FUNC_SUCCESS;
-            }
-          }else{
-            LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
-          }
-        }
-        /* free the returned result */
-        ldap_msgfree( result );
-      }
-      /* finally, if a DN was returned, free it */
-      if( dn ) ldap_memfree( dn );
     }
   }
 func_v1_exit:
@@ -603,7 +643,7 @@ func_v1_exit:
     LOGERROR( "ldap_unbind_ext_s: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
   }
 func_v1_exit_free:
-  if( search_filter ) free( search_filter );
+  if( userdn ) free( userdn );
   return res;
 }
 

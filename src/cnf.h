@@ -23,24 +23,28 @@
 #define _CNF_H_
 
 typedef struct config{
-	char			*uri;
+  char			*uri;
 
-	char			*binddn;
-	char			*bindpw;
+  char			*binddn;
+  char			*bindpw;
 
-	char			*basedn;
-	int				ldap_version;
+  char			*basedn;
+  int				ldap_version;
 
   char      *search_filter;
 
-	char			*ssl;
-	char			*tls_cacertfile;
-	char			*tls_cacertdir;
-	char			*tls_certfile;
-	char			*tls_certkey;
-	char			*tls_ciphersuite;
-	char			*tls_reqcert;
+  char			*ssl;
+  char			*tls_cacertfile;
+  char			*tls_cacertdir;
+  char			*tls_certfile;
+  char			*tls_certkey;
+  char			*tls_ciphersuite;
+  char			*tls_reqcert;
+
   int       timeout;
+  /* group membership */
+  char      *groupdn;
+  char      *member_attribute;
 } config_t;
 
 extern int config_parse_file( const char *filename, config_t *c );
