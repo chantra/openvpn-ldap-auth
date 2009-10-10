@@ -44,6 +44,7 @@ typedef struct config{
   int       timeout;
   /* group membership */
   char      *groupdn;
+  char      *group_search_filter;
   char      *member_attribute;
 } config_t;
 

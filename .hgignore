@@ -7,7 +7,7 @@ syntax: glob
 *.a
 .*.swp
 *~
-openvpn-ldap-rules
+openvpn-ldap-search
 stamp-h1
 Makefile.in
 config.log

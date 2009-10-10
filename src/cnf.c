@@ -82,9 +82,13 @@ config_set_default( config_t *c){
 #ifdef OGROUPDN
   STRDUP_IFNOTSET(c->groupdn, OGROUPDN );
 #endif
+#ifdef OGROUP_SEARCH_FILTER
+  STRDUP_IFNOTSET(c->group_search_filter, OGROUP_SEARCH_FILTER );
+#endif
 #ifdef OMEMBER_ATRIBUTE
   STRDUP_IFNOTSET(c->member_attribute, OMEMBER_ATRIBUTE );
 #endif
+
 }
 
 config_t *
@@ -111,7 +115,9 @@ config_free( config_t *c ){
 	check_and_free( c->tls_certkey );
 	check_and_free( c->tls_ciphersuite );
 	check_and_free( c->tls_reqcert );
+  /* Group */
   check_and_free( c->groupdn );
+  check_and_free( c->group_search_filter );
   check_and_free( c->member_attribute );
 	free( c );
 }
@@ -183,6 +189,8 @@ config_parse_file( const char *filename, config_t *c ){
         if( !c->timeout ) c->timeout = atoi(val);
       }else if( !strcmp( arg, "groupdn" ) ){
         STRDUP_IFNOTSET(c->groupdn, val );
+      }else if( !strcmp( arg, "group_search_filter" ) ){
+        STRDUP_IFNOTSET(c->group_search_filter, val );
       }else if( !strcmp( arg, "member_attribute" ) ){
         STRDUP_IFNOTSET(c->member_attribute, val );
       }
@@ -200,6 +208,7 @@ config_dump( config_t *c){
   STRPRINT_IFSET(c->basedn, "BaseDN");
   STRPRINT_IFSET(c->binddn,"BindDN");
   STRPRINT_IFSET(c->groupdn,"GroupDN");
+  STRPRINT_IFSET(c->group_search_filter, "Group Search Filter");
   STRPRINT_IFSET(c->member_attribute,"Member Attribute");
   /* STRPRINT_IFSET(c->bindpw,"BindPW"); */
   /* TODO finish dumping info */

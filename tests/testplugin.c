@@ -111,7 +111,7 @@ int main(int argc, const char *argv[]) {
 	}
 free_exit:
   sprintf(command, "lsof -n -p %d", pid);
-  system(command);
+  //system(command);
 	openvpn_plugin_close_v1(handle);
 	free((char *) envp[0]);
 	free((char *) envp[1]);

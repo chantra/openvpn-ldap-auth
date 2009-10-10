@@ -566,6 +566,53 @@ ldap_find_user( LDAP *ldap, ldap_context_t *context, char *username ){
   return userdn;
 }
 
+
+int
+ldap_group_membership( LDAP *ldap, ldap_context_t *context, char *userdn ){
+  struct timeval timeout;
+  char *attrs[] = { NULL };
+  LDAPMessage *e, *result;
+  config_t *config = NULL;
+  char *search_filter = NULL;
+  int rc;
+  int res = 1;
+  char filter[]="(&(%s=%s)(%s))";
+
+  /* arguments sanity check */
+  if( !context || !userdn || !ldap){
+    LOGERROR("ldap_group_membership missing required parameter\n");
+    return 1;
+  }
+  config = context->config;
+  
+  /* initialise timeout values */
+  timeout.tv_sec = config->timeout;
+  timeout.tv_usec = 0;
+  if( userdn && config->group_search_filter && config->member_attribute ){
+    search_filter = strdupf(filter,config->member_attribute, userdn, config->group_search_filter);
+  }
+  if( DODEBUG( context->verb ) )
+    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->groupdn );
+
+  rc = ldap_search_ext_s( ldap, config->groupdn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
+  if( rc == LDAP_SUCCESS ){
+    /* Check how many entries were found. Only one should be returned */
+    int nbrow = ldap_count_entries( ldap, result );
+    if( nbrow < 1 ){
+      LOGWARNING( "ldap_search_ext_s: user %s do not match group filter %s\n", userdn, search_filter );
+    }else{
+      if( DODEBUG( context->verb ) )
+        LOGINFO( "User %s matches %d groups with filter %s\n", userdn, nbrow, search_filter );
+      res = 0;
+    }
+    /* free the returned result */
+    ldap_msgfree( result );
+  }
+  if( search_filter ) free( search_filter );
+  return res;
+}
+
+
 OPENVPN_EXPORT int
 openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const char *argv[], const char *envp[])
 {
@@ -633,7 +680,15 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
         /* success, let set our return value to SUCCESS */
         if( DODEBUG( context->verb ) )
           LOGINFO( "User *%s* successfully authenticate\n", username );
-        res = OPENVPN_PLUGIN_FUNC_SUCCESS;
+        /* check if user belong to right groups */
+        if( config->groupdn && config->group_search_filter && config->member_attribute ){
+            rc = ldap_group_membership( ldap, context, userdn );
+            if( rc == 0 ){
+              res = OPENVPN_PLUGIN_FUNC_SUCCESS;
+            }
+        }else{
+          res = OPENVPN_PLUGIN_FUNC_SUCCESS;
+        }
       }
     }
   }
