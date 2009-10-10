@@ -8,9 +8,16 @@ syntax: glob
 .*.swp
 *~
 openvpn-ldap-search
+m4
+depcomp
+install-sh
+libtool
+ltmain.sh
+missing
 stamp-h1
 Makefile.in
 config.log
+config.{guess,sub}
 config.status
 .deps
 .libs

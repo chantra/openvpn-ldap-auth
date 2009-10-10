@@ -58,9 +58,10 @@ int main(int argc, const char *argv[]) {
   
 	/* Grab username and password */
 	printf("Username: ");
-	fgets(username, sizeof(username), stdin);
-	/* Strip off the trailing \n */
-	username[strlen(username) - 1] = '\0';
+	if(!scanf("%s", username)){
+    fprintf(stderr, "Could not read username\n");
+    return 1;
+  }
 
 	password = getpass("Password: ");
 

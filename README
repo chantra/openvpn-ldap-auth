@@ -2,7 +2,8 @@
 aclocal
 autoheader
 autoconf
-automake
+libtoolize
+automake --add-missing
 
 ./configure
 make

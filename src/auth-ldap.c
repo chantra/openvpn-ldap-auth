@@ -248,6 +248,7 @@ daemonize (const char *envp[])
 
 #endif
 
+#if 0
 /*
  * Close most of parent's fds.
  * Keep stdin/stdout/stderr, plus one
@@ -300,7 +301,7 @@ name_value_match (const char *query, const char *match)
     }
   return strncasecmp (match, query, strlen (match)) == 0;
 }
-
+#endif
 OPENVPN_EXPORT openvpn_plugin_handle_t
 openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char *envp[])
 {
@@ -396,13 +397,13 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
  */
 
 int
-ldap_binddn( LDAP *ldap, char *username, char *password ){
+ldap_binddn( LDAP *ldap, const char *username, const char *password ){
   int rc;
   struct berval bv, *servcred = NULL;
 
   if( password && strlen(password) ){
     bv.bv_len = strlen(password);
-    bv.bv_val = password;
+    bv.bv_val = (char *)password;
   }else{
     bv.bv_len = 0;
     bv.bv_val = NULL;
@@ -422,7 +423,6 @@ connect_ldap( ldap_context_t *context ){
   int rc;
   config_t *config = context->config;
   int ldap_tls_require_cert;
-  struct berval bv, *bv2;
   struct timeval timeout;
 
   /* init connection to ldap */
@@ -509,7 +509,7 @@ connect_ldap_error:
  * Given a search_filter and context, will search for 
  */
 char *
-ldap_find_user( LDAP *ldap, ldap_context_t *context, char *username ){
+ldap_find_user( LDAP *ldap, ldap_context_t *context, const char *username ){
   struct timeval timeout;
   char *attrs[] = { NULL };
   char          *dn = NULL;
@@ -571,7 +571,7 @@ int
 ldap_group_membership( LDAP *ldap, ldap_context_t *context, char *userdn ){
   struct timeval timeout;
   char *attrs[] = { NULL };
-  LDAPMessage *e, *result;
+  LDAPMessage *result;
   config_t *config = NULL;
   char *search_filter = NULL;
   int rc;
@@ -625,7 +625,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   /* get username/password from envp string array */
   const char *username = get_env ("username", envp);
   const char *password = get_env ("password", envp);
-  const char *ip = get_env ("ifconfig_pool_remote_ip", envp );
+  //const char *ip = get_env ("ifconfig_pool_remote_ip", envp );
 
 
   /* required parameters check */
@@ -672,7 +672,6 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
           fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s\n", username );
         #endif
       }
-     
       rc = ldap_binddn( ldap, userdn, password );
       if( rc != LDAP_SUCCESS ){
         LOGERROR( "rebinding: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
@@ -697,7 +696,7 @@ func_v1_exit:
   if( rc != LDAP_SUCCESS ){
     LOGERROR( "ldap_unbind_ext_s: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
   }
-func_v1_exit_free:
+//func_v1_exit_free:
   if( userdn ) free( userdn );
   return res;
 }
