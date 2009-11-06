@@ -1,3 +1,6 @@
+version 0.0.2 2009-11-06
+	* Handle group membership
+
 version 0.0.1 2009-10-09
 	* First release of the plugin
 	* Handles START_TLS without verifying the certificate
