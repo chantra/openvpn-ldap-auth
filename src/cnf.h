@@ -51,6 +51,7 @@ typedef struct config{
 extern int config_parse_file( const char *filename, config_t *c );
 
 extern config_t *config_new( void );
+extern config_t *config_dup( config_t *c );
 extern void config_free( config_t *c );
 extern void config_dump( config_t *c);
 extern void config_set_default( config_t *c);

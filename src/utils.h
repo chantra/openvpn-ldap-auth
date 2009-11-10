@@ -23,6 +23,13 @@
 #ifndef _UITLS_H_
 #define _UTILS_H_
 
+#include <stdlib.h>
+
+/* memory allocation */
+extern void *la_malloc( size_t size );
+extern void la_free( void *ptr );
+extern void *la_memset( void *s, int c, size_t n );
+
 /*
  *  Duplicates the string specified by the format-string [fmt].
  *  Returns the new string, or NULL if out of memory.

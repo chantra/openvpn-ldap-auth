@@ -99,6 +99,36 @@ config_new( void ){
 	return c;
 }
 
+config_t *
+config_dup( config_t *c ){
+  config_t *nc = NULL;
+  if( !c ) return NULL;
+  nc = config_new( );
+  if( !nc ) return NULL;
+
+  if( c->uri ) nc->uri = strdup( c->uri );
+  if( c->binddn ) nc->binddn = strdup( c->binddn );
+  if( c->bindpw ) nc->bindpw = strdup( c->bindpw );
+  if( c->basedn ) nc->basedn = strdup( c->basedn );
+  nc->ldap_version = c->ldap_version;
+  if( c->search_filter ) nc->search_filter = strdup( c->search_filter );
+  if( c->ssl ) nc->ssl = strdup( c->ssl );
+  if( c->tls_cacertfile ) nc->tls_cacertfile = strdup( c->tls_cacertfile );
+  if( c->tls_cacertdir ) nc->tls_cacertdir = strdup( c->tls_cacertdir );
+  if( c->tls_certfile ) nc->tls_certfile = strdup( c->tls_certfile );
+  if( c->tls_certkey ) nc->tls_certkey = strdup( c->tls_certkey );
+  if( c->tls_ciphersuite ) nc->tls_ciphersuite = strdup( c->tls_ciphersuite );
+  if( c->tls_reqcert ) nc->tls_reqcert = strdup( c->tls_reqcert );
+
+  nc->timeout = c->timeout;
+  
+  if( c->groupdn ) nc->groupdn = strdup( c->groupdn );
+  if( c->group_search_filter ) nc->group_search_filter = strdup( c->group_search_filter );
+  if( c->member_attribute ) nc->member_attribute = strdup( c->member_attribute );
+
+  return nc;
+}
+
 void
 config_free( config_t *c ){
 	if( !c ) return;

@@ -23,11 +23,25 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 #include <termios.h>
 #include <stdarg.h>
 
 #define BACKSPACE 127
+
+void *
+la_malloc( size_t size ){
+  return malloc( size );
+}
+
+void
+la_free( void *ptr ){
+  free( ptr );
+}
+
+void *
+la_memset( void *s, int c, size_t n ){
+  return memset( s, c, n );
+}
 
 char *
 strdupf (const char *fmt, ...){

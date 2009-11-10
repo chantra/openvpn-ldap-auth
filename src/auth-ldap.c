@@ -43,9 +43,13 @@
 #include <errno.h>
 #include <ldap.h>
 
+#include <pthread.h>
+
+
 #include "cnf.h"
 #include "utils.h"
 #include "debug.h"
+#include "list.h"
 
 #define DODEBUG(verb) ((verb) >= 4)
 #if 0
@@ -71,8 +75,48 @@ typedef struct ldap_context
 
   /* Verbosity level of OpenVPN */
   int verb;
+  /* list of pending threads*/
+  list_t *lthread;
+
 } ldap_context_t;
 
+/**
+ * Data to be passed to a 
+ * thread for user authentication
+ */
+typedef struct auth_context
+{
+  config_t        *config;
+  int             verb;
+  char            *username;
+  char            *password;
+  char            *auth_control_file;
+} auth_context_t;
+
+/** 
+ * Allocate Authentication context resources
+ */
+auth_context_t *
+auth_context_new( void ){
+  auth_context_t *a = NULL;
+  a = la_malloc( sizeof( auth_context_t ) ); 
+  if( a ) la_memset( a, 0, sizeof( auth_context_t ) );  
+  return a;
+}
+
+/**
+ * Free Authentication context resources
+ */
+void
+auth_context_free( auth_context_t *a ){
+  if( !a ) return;
+  if( a->config ) config_free( a->config );
+  if( a->username ) free( a->username );
+  if( a->password ) free( a->password );
+  if( a->auth_control_file ) free( a->auth_control_file );
+  free( a );
+  return;
+}
 
 /**
  * Free LDAP context resources
@@ -315,7 +359,16 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
    * Allocate our context
    */
   context = ldap_context_new( );
-  if( !context ) goto error;
+  if( !context ){
+    LOGERROR( "Failed to initialize context\n" );  
+    goto error;
+  }
+  /* create out pthread_t list */
+  context->lthread = list_new( );
+  if( !context->lthread ){
+    LOGERROR( "Failed to initialize thread list\n" );
+    goto error;
+  }
 
   /*
    * Intercept the --auth-user-pass-verify callback.
@@ -385,8 +438,12 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   return (openvpn_plugin_handle_t) context;
 
  error:
-  if (context)
+  if ( context ){
+    if( context->lthread ){
+      list_free( context->lthread, NULL );
+    }
     ldap_context_free (context);
+  }
   return NULL;
 }
 
@@ -418,10 +475,10 @@ ldap_binddn( LDAP *ldap, const char *username, const char *password ){
  * Do not bind to LDAP, use ldap_bindn for that purpose
  */
 LDAP *
-connect_ldap( ldap_context_t *context ){
+connect_ldap( auth_context_t *auth_context ){
   LDAP *ldap;
   int rc;
-  config_t *config = context->config;
+  config_t *config = auth_context->config;
   int ldap_tls_require_cert;
   struct timeval timeout;
 
@@ -464,7 +521,7 @@ connect_ldap( ldap_context_t *context ){
   }
 #if 0
   if( bind ){
-    if (DODEBUG (context->verb))
+    if (DODEBUG (auth_context->verb))
       fprintf( stderr, "AUTH-LDAP: LDAP binding with user %s\n", (config->binddn ? config->binddn: "Anonymous" ) );
     
     rc = ldap_binddn( ldap, config->binddn, config->bindpw );
@@ -480,7 +537,7 @@ connect_ldap( ldap_context_t *context ){
 */  
     switch( rc ){
       case LDAP_SUCCESS:
-        if( DODEBUG( context->verb ) )
+        if( DODEBUG( auth_context->verb ) )
           fprintf( stderr, "AUTH-LDAP: ldap_sasl_bind_s success\n");
         break;
       case LDAP_INVALID_CREDENTIALS:
@@ -509,7 +566,7 @@ connect_ldap_error:
  * Given a search_filter and context, will search for 
  */
 char *
-ldap_find_user( LDAP *ldap, ldap_context_t *context, const char *username ){
+ldap_find_user( LDAP *ldap, auth_context_t *auth_context, const char *username ){
   struct timeval timeout;
   char *attrs[] = { NULL };
   char          *dn = NULL;
@@ -520,11 +577,11 @@ ldap_find_user( LDAP *ldap, ldap_context_t *context, const char *username ){
   char *userdn = NULL;
 
   /* arguments sanity check */
-  if( !context || !username || !ldap){
+  if( !auth_context || !username || !ldap){
     LOGERROR("ldap_find_user missing required parameter\n");
     return NULL;
   }
-  config = context->config;
+  config = auth_context->config;
   
   /* initialise timeout values */
   timeout.tv_sec = config->timeout;
@@ -532,7 +589,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *context, const char *username ){
   if( username && config->search_filter ){
     search_filter = str_replace(config->search_filter, "%u", username );
   }
-  if( DODEBUG( context->verb ) )
+  if( DODEBUG( auth_context->verb ) )
     LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->basedn );
 
   rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
@@ -548,7 +605,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *context, const char *username ){
       e =  ldap_first_entry( ldap, result );
       if( e != NULL ){
         dn = ldap_get_dn( ldap, e );
-        if( DODEBUG( context->verb ) )
+        if( DODEBUG( auth_context->verb ) )
           LOGINFO("found dn: %s\n", dn );
       }else{
         LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
@@ -568,7 +625,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *context, const char *username ){
 
 
 int
-ldap_group_membership( LDAP *ldap, ldap_context_t *context, char *userdn ){
+ldap_group_membership( LDAP *ldap, auth_context_t *auth_context, char *userdn ){
   struct timeval timeout;
   char *attrs[] = { NULL };
   LDAPMessage *result;
@@ -579,11 +636,11 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *context, char *userdn ){
   char filter[]="(&(%s=%s)(%s))";
 
   /* arguments sanity check */
-  if( !context || !userdn || !ldap){
+  if( !auth_context || !userdn || !ldap){
     LOGERROR("ldap_group_membership missing required parameter\n");
     return 1;
   }
-  config = context->config;
+  config = auth_context->config;
   
   /* initialise timeout values */
   timeout.tv_sec = config->timeout;
@@ -591,7 +648,7 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *context, char *userdn ){
   if( userdn && config->group_search_filter && config->member_attribute ){
     search_filter = strdupf(filter,config->member_attribute, userdn, config->group_search_filter);
   }
-  if( DODEBUG( context->verb ) )
+  if( DODEBUG( auth_context->verb ) )
     LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->groupdn );
 
   rc = ldap_search_ext_s( ldap, config->groupdn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
@@ -601,7 +658,7 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *context, char *userdn ){
     if( nbrow < 1 ){
       LOGWARNING( "ldap_search_ext_s: user %s do not match group filter %s\n", userdn, search_filter );
     }else{
-      if( DODEBUG( context->verb ) )
+      if( DODEBUG( auth_context->verb ) )
         LOGINFO( "User %s matches %d groups with filter %s\n", userdn, nbrow, search_filter );
       res = 0;
     }
@@ -612,30 +669,25 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *context, char *userdn ){
   return res;
 }
 
-
-OPENVPN_EXPORT int
-openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const char *argv[], const char *envp[])
+/**
+ * thread handling user authentication
+ */
+void *
+_authentication_thread( void *arg )
 {
-  ldap_context_t *context = (ldap_context_t *) handle;
-  config_t *config = context->config;
+  unsigned int slp = 6;
+
   LDAP *ldap = NULL;
   int rc;
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
+
   char *userdn = NULL;
-  /* get username/password from envp string array */
-  const char *username = get_env ("username", envp);
-  const char *password = get_env ("password", envp);
-  //const char *ip = get_env ("ifconfig_pool_remote_ip", envp );
+  auth_context_t *auth_context = arg;
+  config_t *config = auth_context->config;
+  LOGINFO( "Sleep %d sec\n", slp);
 
-
-  /* required parameters check */
-  if (!username){
-    LOGERROR("No username supplied to OpenVPN plugin");
-    return OPENVPN_PLUGIN_FUNC_ERROR;
-  }
-  
   /* Connection to LDAP backend */
-  ldap = connect_ldap( context );
+  ldap = connect_ldap( config );
   if( ldap == NULL ){
     LOGERROR( "Could not connect to URI %s\n", config->uri );
     return OPENVPN_PLUGIN_FUNC_ERROR;        
@@ -644,7 +696,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   rc = ldap_binddn( ldap, config->binddn, config->bindpw );
   switch( rc ){
     case LDAP_SUCCESS:
-      if( DODEBUG( context->verb ) )
+      if( DODEBUG( auth_context->verb ) )
         LOGINFO( "ldap_sasl_bind_s %s success\n", config->binddn ? config->binddn : "Anonymous" );
       break;
     case LDAP_INVALID_CREDENTIALS:
@@ -655,33 +707,33 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
       goto func_v1_exit;
   }
 
-  userdn = ldap_find_user( ldap, context, username );
+  userdn = ldap_find_user( ldap, auth_context, auth_context->username );
   if( !userdn ){
-    LOGWARNING( "LDAP user *%s* was not found \n", username );
+    LOGWARNING( "LDAP user *%s* was not found \n", auth_context->username );
     goto func_v1_exit;
   }
   
-
-  if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY && context && context->config ){
-      if (username && strlen (username) > 0 && password){
+  /* OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY */
+  if (auth_context && auth_context->config ){
+      if (auth_context->username && strlen (auth_context->username) > 0 && auth_context->password){
       /** TODO authenticate user */
-      if (DODEBUG (context->verb)) {
+      if (DODEBUG (auth_context->verb)) {
         #if 0
-          fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s Password:%s\n", username, password);
+          fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s Password:%s\n", auth_context->username, auth_context->password);
         #else
-          fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s\n", username );
+          fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s\n", auth_context->username );
         #endif
       }
-      rc = ldap_binddn( ldap, userdn, password );
+      rc = ldap_binddn( ldap, userdn, auth_context->password );
       if( rc != LDAP_SUCCESS ){
         LOGERROR( "rebinding: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
       }else{
         /* success, let set our return value to SUCCESS */
-        if( DODEBUG( context->verb ) )
-          LOGINFO( "User *%s* successfully authenticate\n", username );
+        if( DODEBUG( auth_context->verb ) )
+          LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
         /* check if user belong to right groups */
         if( config->groupdn && config->group_search_filter && config->member_attribute ){
-            rc = ldap_group_membership( ldap, context, userdn );
+            rc = ldap_group_membership( ldap, auth_context, userdn );
             if( rc == 0 ){
               res = OPENVPN_PLUGIN_FUNC_SUCCESS;
             }
@@ -698,6 +750,84 @@ func_v1_exit:
   }
 //func_v1_exit_free:
   if( userdn ) free( userdn );
+  return res;
+
+}
+
+OPENVPN_EXPORT int
+openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const char *argv[], const char *envp[])
+{
+  ldap_context_t *context = (ldap_context_t *) handle;
+  auth_context_t *auth_context = NULL;
+  pthread_t *tid = NULL;
+
+  
+  config_t *config = context->config;
+  int rc;
+  int res = OPENVPN_PLUGIN_FUNC_ERROR;
+  /* get username/password/auth_control_file from envp string array */
+  const char *username = get_env ("username", envp);
+  const char *password = get_env ("password", envp);
+  const char *auth_control_file = get_env ( "auth_control_file", envp );
+
+  if( type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY ){
+
+    /* required parameters check */
+    if (!username){
+      LOGERROR("No username supplied to OpenVPN plugin");
+      return OPENVPN_PLUGIN_FUNC_ERROR;
+    }
+
+    auth_context = auth_context_new( );
+    if( !auth_context ){
+      LOGERROR( "Could not allocate auth_context before calling thread\n" );
+      return res;
+    }
+    /* FIXME might not need to dup config struct */
+    auth_context->config = config_dup( config );
+    auth_context->verb = context->verb;
+    if( username ) auth_context->username = strdup( username );
+    if( password ) auth_context->password = strdup( password );
+    if( auth_control_file ) auth_context->auth_control_file = strdup( auth_control_file );
+    /* If some argument were missing or could not be duplicate */
+    if( !(auth_context->config && auth_context->username && auth_context->password && auth_context->auth_control_file ) ){
+      auth_context_free( auth_context );
+      return res;
+    }
+    /* now we can trigger our authentication thread */
+    tid = la_malloc( sizeof( pthread_t ) );
+    if( !tid ){
+      LOGERROR( "Could not allocated pthread_t\n" );
+      auth_context_free( auth_context );
+      return res;
+    }
+    la_memset( tid, 0, sizeof( pthread_t ) );
+    rc = pthread_create( tid, NULL, _authentication_thread, auth_context );
+    switch( rc ){
+      case EAGAIN:
+        LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
+        break;
+      case EINVAL:
+        LOGERROR( "pthread_create returned EINVAL: invalid attributes\n" );
+        break;
+      case EPERM:
+        LOGERROR( "pthread_create returned EPERM: no permission to create thread\n" );
+        break;
+      case 0:
+        res = OPENVPN_PLUGIN_FUNC_DEFERRED;
+        if( DODEBUG( context->verb ) ){
+          LOGINFO( "pthread_create(authentication_thread) successful, deferring authentication\n" );
+        }
+        break;
+      default:
+        LOGERROR( "pthread_create returned an unhandled value: %d\n", rc );
+    }
+    return res;
+    
+  }
+  //const char *ip = get_env ("ifconfig_pool_remote_ip", envp );
+
+  
   return res;
 }
 
