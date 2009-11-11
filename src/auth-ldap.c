@@ -364,12 +364,13 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
     goto error;
   }
   /* create out pthread_t list */
+  /*
   context->lthread = list_new( );
   if( !context->lthread ){
     LOGERROR( "Failed to initialize thread list\n" );
     goto error;
   }
-
+  */
   /*
    * Intercept the --auth-user-pass-verify callback.
    */
@@ -669,6 +670,29 @@ ldap_group_membership( LDAP *ldap, auth_context_t *auth_context, char *userdn ){
   return res;
 }
 
+/* write a value to auth_control_file */
+int
+write_to_auth_control_file( const char *auth_control_file, char value )
+{
+  int fd, rc;
+  fd = open( auth_control_file, O_WRONLY | O_CREAT );
+  if( fd == -1 ){
+    LOGERROR( "Could not open file %s: %s\n", auth_control_file, strerror( errno ) );
+    return -1;
+  }
+  rc = write( fd, &value, 1 );
+  if( rc == -1 ){
+    LOGERROR( "Could not write value %c to  file %s: %s\n", value, auth_control_file, strerror( errno ) );
+  }else if( rc !=1 ){
+    LOGERROR( "Could not write value %c to file %s\n", value, auth_control_file );
+  }
+  rc = close( fd );
+  if( rc != 0 ){
+    LOGERROR( "Could not close file %s: %s\n", auth_control_file, strerror( errno ) );
+  }
+  return rc == 0;
+}
+
 /**
  * thread handling user authentication
  */
@@ -682,15 +706,16 @@ _authentication_thread( void *arg )
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
 
   char *userdn = NULL;
-  auth_context_t *auth_context = arg;
+  auth_context_t *auth_context = ( auth_context_t * )arg;
   config_t *config = auth_context->config;
   LOGINFO( "Sleep %d sec\n", slp);
+  //sleep(slp);
 
   /* Connection to LDAP backend */
-  ldap = connect_ldap( config );
+  ldap = connect_ldap( auth_context );
   if( ldap == NULL ){
     LOGERROR( "Could not connect to URI %s\n", config->uri );
-    return OPENVPN_PLUGIN_FUNC_ERROR;        
+    goto auth_thread_exit;        
   }
   /* bind to LDAP server anonymous or authenticated */
   rc = ldap_binddn( ldap, config->binddn, config->bindpw );
@@ -698,19 +723,19 @@ _authentication_thread( void *arg )
     case LDAP_SUCCESS:
       if( DODEBUG( auth_context->verb ) )
         LOGINFO( "ldap_sasl_bind_s %s success\n", config->binddn ? config->binddn : "Anonymous" );
-      break;
+        break;
     case LDAP_INVALID_CREDENTIALS:
       LOGERROR( "ldap_binddn: Invalid Credentials\n" );
-      goto func_v1_exit;
+      goto auth_thread_free;
     default:
       LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-      goto func_v1_exit;
+      goto auth_thread_free;
   }
 
   userdn = ldap_find_user( ldap, auth_context, auth_context->username );
   if( !userdn ){
     LOGWARNING( "LDAP user *%s* was not found \n", auth_context->username );
-    goto func_v1_exit;
+    goto auth_thread_free;
   }
   
   /* OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY */
@@ -743,13 +768,22 @@ _authentication_thread( void *arg )
       }
     }
   }
-func_v1_exit:
+auth_thread_free:
   rc = ldap_unbind_ext_s( ldap, NULL, NULL );
   if( rc != LDAP_SUCCESS ){
     LOGERROR( "ldap_unbind_ext_s: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
   }
 //func_v1_exit_free:
   if( userdn ) free( userdn );
+
+auth_thread_exit:
+  /* we need to write the result to  auth_control_file */
+  if( DODEBUG(auth_context->verb ) ){
+    LOGINFO( "User %s: Writing %c to file %s\n", auth_context->username, res == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0', auth_context->auth_control_file );
+  }
+  rc = write_to_auth_control_file( auth_context->auth_control_file, res == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0' );
+  auth_context_free( auth_context );
+  pthread_exit( res );
   return res;
 
 }
@@ -760,6 +794,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   ldap_context_t *context = (ldap_context_t *) handle;
   auth_context_t *auth_context = NULL;
   pthread_t *tid = NULL;
+  pthread_attr_t tattr;
 
   
   config_t *config = context->config;
@@ -802,7 +837,9 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
       return res;
     }
     la_memset( tid, 0, sizeof( pthread_t ) );
-    rc = pthread_create( tid, NULL, _authentication_thread, auth_context );
+    pthread_attr_init( &tattr );
+     pthread_attr_setdetachstate( &tattr, PTHREAD_CREATE_DETACHED );
+    rc = pthread_create( tid, &tattr, _authentication_thread, auth_context );
     switch( rc ){
       case EAGAIN:
         LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
