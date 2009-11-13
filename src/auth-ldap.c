@@ -672,10 +672,10 @@ ldap_group_membership( LDAP *ldap, auth_context_t *auth_context, char *userdn ){
 
 /* write a value to auth_control_file */
 int
-write_to_auth_control_file( const char *auth_control_file, char value )
+write_to_auth_control_file( char *auth_control_file, char value )
 {
   int fd, rc;
-  fd = open( auth_control_file, O_WRONLY | O_CREAT );
+  fd = open( auth_control_file, O_WRONLY | O_CREAT, 0700 );
   if( fd == -1 ){
     LOGERROR( "Could not open file %s: %s\n", auth_control_file, strerror( errno ) );
     return -1;
@@ -708,9 +708,8 @@ _authentication_thread( void *arg )
   char *userdn = NULL;
   auth_context_t *auth_context = ( auth_context_t * )arg;
   config_t *config = auth_context->config;
-  LOGINFO( "Sleep %d sec\n", slp);
+  //LOGINFO( "Sleep %d sec\n", slp);
   //sleep(slp);
-
   /* Connection to LDAP backend */
   ldap = connect_ldap( auth_context );
   if( ldap == NULL ){
@@ -783,8 +782,8 @@ auth_thread_exit:
   }
   rc = write_to_auth_control_file( auth_context->auth_control_file, res == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0' );
   auth_context_free( auth_context );
-  pthread_exit( res );
-  return res;
+  pthread_exit( NULL );
+  return NULL;
 
 }
 
@@ -793,8 +792,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
 {
   ldap_context_t *context = (ldap_context_t *) handle;
   auth_context_t *auth_context = NULL;
-  pthread_t *tid = NULL;
-  pthread_attr_t tattr;
+  pthread_t tid;
 
   
   config_t *config = context->config;
@@ -830,16 +828,8 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
       return res;
     }
     /* now we can trigger our authentication thread */
-    tid = la_malloc( sizeof( pthread_t ) );
-    if( !tid ){
-      LOGERROR( "Could not allocated pthread_t\n" );
-      auth_context_free( auth_context );
-      return res;
-    }
-    la_memset( tid, 0, sizeof( pthread_t ) );
-    pthread_attr_init( &tattr );
-     pthread_attr_setdetachstate( &tattr, PTHREAD_CREATE_DETACHED );
-    rc = pthread_create( tid, &tattr, _authentication_thread, auth_context );
+    //la_memset( tid, 0, sizeof( pthread_t ) );
+    rc = pthread_create( &tid, NULL, _authentication_thread, auth_context );
     switch( rc ){
       case EAGAIN:
         LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
@@ -851,6 +841,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
         LOGERROR( "pthread_create returned EPERM: no permission to create thread\n" );
         break;
       case 0:
+        pthread_detach( tid );
         res = OPENVPN_PLUGIN_FUNC_DEFERRED;
         if( DODEBUG( context->verb ) ){
           LOGINFO( "pthread_create(authentication_thread) successful, deferring authentication\n" );
@@ -877,6 +868,7 @@ openvpn_plugin_close_v1 (openvpn_plugin_handle_t handle)
     LOGINFO( "close\n" );
 
   ldap_context_free( context );
+//  pthread_exit(NULL);
 }
 
 OPENVPN_EXPORT void

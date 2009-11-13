@@ -29,7 +29,7 @@ AC_CHECK_HEADER([ldap.h],
 if ! test "x$have_ldap" = "xyes"; then
     AC_MSG_ERROR("ldap headers not found")
 else
-    LIBS="${LIBS} -lldap_r -lpthread"
+    LIBS="${LIBS} -lldap -lpthread"
 fi
 AC_PROG_INSTALL
 AC_OUTPUT( Makefile src/Makefile tests/Makefile )

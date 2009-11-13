@@ -42,13 +42,16 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#define SLEEP_TIME 5
+
 const char username_template[] = "username=";
 const char password_template[] = "password=";
+
 
 int main(int argc, const char *argv[]) {
 	openvpn_plugin_handle_t handle;
 	unsigned int type;
-	const char *envp[5]; /* username, password, verb, ifconfig_pool_remote_ip, NULL */
+	const char *envp[6]; /* username, password, verb, ifconfig_pool_remote_ip, NULL */
 	char username[30];
 	char *password;
 	int err;
@@ -77,7 +80,8 @@ int main(int argc, const char *argv[]) {
 	/* Remote Pool IP */
 	envp[2] = "ifconfig_pool_remote_ip=10.0.50.1";
   envp[3] = "verb=4";
-	envp[4] = NULL;
+  envp[4] = "auth_control_file=foobar_ctrl_file.txt";
+	envp[5] = NULL;
 
 	handle = openvpn_plugin_open_v1(&type, argv, envp);
 
@@ -88,12 +92,16 @@ int main(int argc, const char *argv[]) {
   int loop = 1;
   for( ; loop; --loop ){
     err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp);
-    if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
+    if (err == OPENVPN_PLUGIN_FUNC_ERROR) {
       printf("Authorization Failed!\n");
-    } else {
+    } else if( err == OPENVPN_PLUGIN_FUNC_SUCCESS ) {
       printf("Authorization Succeed!\n");
+    }else if ( err == OPENVPN_PLUGIN_FUNC_DEFERRED ){
+      printf("Authorization Deferred!\n");
     }
   }
+  printf( "Sleeping %d second waiting for threads to exits...\n", SLEEP_TIME );
+  sleep( SLEEP_TIME );
   goto free_exit;
 	/* Client Connect */
 	err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_CLIENT_CONNECT, argv, envp);
@@ -114,8 +122,10 @@ free_exit:
   sprintf(command, "lsof -n -p %d", pid);
   //system(command);
 	openvpn_plugin_close_v1(handle);
+
 	free((char *) envp[0]);
 	free((char *) envp[1]);
 
+  
 	exit (0);
 }
