@@ -699,7 +699,6 @@ write_to_auth_control_file( char *auth_control_file, char value )
 void *
 _authentication_thread( void *arg )
 {
-  unsigned int slp = 6;
 
   LDAP *ldap = NULL;
   int rc;
@@ -708,8 +707,11 @@ _authentication_thread( void *arg )
   char *userdn = NULL;
   auth_context_t *auth_context = ( auth_context_t * )arg;
   config_t *config = auth_context->config;
-  //LOGINFO( "Sleep %d sec\n", slp);
-  //sleep(slp);
+#if 0
+  unsigned int slp = 6;
+  LOGINFO( "Sleep %d sec\n", slp);
+  sleep(slp);
+#endif
   /* Connection to LDAP backend */
   ldap = connect_ldap( auth_context );
   if( ldap == NULL ){
