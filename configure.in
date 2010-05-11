@@ -1,6 +1,6 @@
 m4_define([openvpnldapauth_version_major],[0])
 m4_define([openvpnldapauth_version_minor],[0])
-m4_define([openvpnldapauth_version_micro],[1])
+m4_define([openvpnldapauth_version_micro],[3])
 m4_define([openvpnldapauth_version_extra],[])
 m4_define([openvpnldapauth_version],[openvpnldapauth_version_major().openvpnldapauth_version_minor().openvpnldapauth_version_micro()openvpnldapauth_version_extra()])
 
@@ -19,18 +19,17 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_CC
 
 CFLAGS="${CFLAGS} -g -Wall -Werror -D_FILE_OFFSET_BITS=64"
-dnl avoid sqlite3 possibly lost... DSQLITE_THREADSAFE=0
-dnl CFLAGS="${CFLAGS} -DSQLITE_THREADSAFE=0"
 
 AC_SUBST(CFLAGS)
+
 AC_CHECK_HEADER([ldap.h],
-        [AC_CHECK_LIB(ldap, [ldap_initialize],[have_ldap="yes"],[have_ldap="no"],[-lldap_r])],
-        [have_ldap="no"])
-if ! test "x$have_ldap" = "xyes"; then
-    AC_MSG_ERROR("ldap headers not found")
-else
-    LIBS="${LIBS} -lldap -lpthread"
-fi
+        [AC_CHECK_LIB(ldap, [ldap_initialize])],
+        [AC_MSG_ERROR("ldap headers not found")])
+
+AC_CHECK_HEADER([pthread.h],
+      [AC_CHECK_LIB(pthread, [pthread_create])],
+      [AC_MSG_ERROR("pthread headers not found")])
+
 AC_PROG_INSTALL
 AC_OUTPUT( Makefile src/Makefile tests/Makefile )
 

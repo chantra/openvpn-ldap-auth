@@ -1,4 +1,10 @@
+Dependencies:
+-------------
+libldap
+libpthread
 
+Installation:
+-------------
 aclocal
 autoconf
 libtoolize
@@ -7,3 +13,29 @@ automake --add-missing
 ./configure
 make
 make install
+
+or
+
+./autogen.sh
+./configure
+make
+make install
+
+Configuration:
+--------------
+
+Grab the example configuration file: tests/config.conf
+
+uri=ldap://192.168.9.135
+basedn=ou=users,dc=example,dc=com
+binddn=cn=admin,dc=example,dc=com
+bindpw=secret
+version=3
+#ssl=start_tls
+ssl=off
+groupdn=ou=roles,dc=example,dc=com
+group_search_filter=|(cn=vpn)(cn=sysadmins)
+member_attribute=member
+
+
+

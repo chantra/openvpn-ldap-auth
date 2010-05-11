@@ -1,3 +1,10 @@
+version 0.0.3 2010-05-11
+	* Authentication is now made in a separate thread
+		- Avoid to hang current connection while LDAP backend is slow
+	* Change name to openvpn-ldap-auth
+		- Avoid name clash with http://code.google.com/p/openvpn-auth-ldap/
+	* Better configure.in
+
 version 0.0.2 2009-11-06
 	* Handle group membership
 
