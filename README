@@ -21,6 +21,9 @@ or
 make
 make install
 
+Optionally, if you only ran make, you can copy the .so files
+from src/.libs/
+
 Configuration:
 --------------
 
@@ -37,5 +40,10 @@ groupdn=ou=roles,dc=example,dc=com
 group_search_filter=|(cn=vpn)(cn=sysadmins)
 member_attribute=member
 
+In your openvpn config add:
+plugin /etc/openvpn/ldap-auth/libopenvpn-ldap-auth.so -c /etc/openvpn/ldap-auth/ldap-auth.conf
+also, setting:
+tmp-dir /dev/shm
 
+will help in case you do not run openvpn as root
 

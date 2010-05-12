@@ -204,63 +204,6 @@ string_array_len (const char *array[])
   return i;
 }
 
-#if 0
-/* may be useful at a later stage */
-/*
- * Socket read/write functions.
- */
-
-static int
-recv_control (int fd)
-{
-  unsigned char c;
-  const ssize_t size = read (fd, &c, sizeof (c));
-  if (size == sizeof (c))
-    return c;
-  else
-    {
-      /*fprintf (stderr, "AUTH-LDAP: DEBUG recv_control.read=%d\n", (int)size);*/
-      return -1;
-    }
-}
-
-static int
-send_control (int fd, int code)
-{
-  unsigned char c = (unsigned char) code;
-  const ssize_t size = write (fd, &c, sizeof (c));
-  if (size == sizeof (c))
-    return (int) size;
-  else
-    return -1;
-}
-
-static int
-recv_string (int fd, char *buffer, int len)
-{
-  if (len > 0)
-    {
-      ssize_t size;
-      memset (buffer, 0, len);
-      size = read (fd, buffer, len);
-      buffer[len-1] = 0;
-      if (size >= 1)
-	return (int)size;
-    }
-  return -1;
-}
-
-static int
-send_string (int fd, const char *string)
-{
-  const int len = strlen (string) + 1;
-  const ssize_t size = write (fd, string, len);
-  if (size == len)
-    return (int) size;
-  else
-    return -1;
-}
-#endif /* #if 0 */
 #ifdef DO_DAEMONIZE
 
 /*
@@ -280,7 +223,7 @@ daemonize (const char *envp[])
 	fd = dup (2);
       if (daemon (0, 0) < 0)
 	{
-	  fprintf (stderr, "AUTH-LDAP: daemonization failed\n");
+	  fprintf (stderr, "LDAP-AUTH: daemonization failed\n");
 	}
       else if (fd >= 3)
 	{
@@ -404,13 +347,13 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
         context->config->timeout = atoi( optarg );
         break;
       case '?':
-        fprintf( stderr, "AUTH-LDAP: Unknown Option -%c !!\n", optopt );
+        fprintf( stderr, "LDAP-AUTH: Unknown Option -%c !!\n", optopt );
         break;
       case ':':
-        fprintf( stderr, "AUTH-LDAP: Missing argument for option -%c !!\n", optopt );
+        fprintf( stderr, "LDAP-AUTH: Missing argument for option -%c !!\n", optopt );
         break;
       default:
-        fprintf(stderr, "AUTH-LDAP: ?? getopt returned character code 0%o ??\n", rc);
+        fprintf(stderr, "LDAP-AUTH: ?? getopt returned character code 0%o ??\n", rc);
         abort();
     }
   }
@@ -523,7 +466,7 @@ connect_ldap( auth_context_t *auth_context ){
 #if 0
   if( bind ){
     if (DODEBUG (auth_context->verb))
-      fprintf( stderr, "AUTH-LDAP: LDAP binding with user %s\n", (config->binddn ? config->binddn: "Anonymous" ) );
+      fprintf( stderr, "LDAP-AUTH: LDAP binding with user %s\n", (config->binddn ? config->binddn: "Anonymous" ) );
     
     rc = ldap_binddn( ldap, config->binddn, config->bindpw );
 /** made redundant per ldap_binddn function
@@ -539,7 +482,7 @@ connect_ldap( auth_context_t *auth_context ){
     switch( rc ){
       case LDAP_SUCCESS:
         if( DODEBUG( auth_context->verb ) )
-          fprintf( stderr, "AUTH-LDAP: ldap_sasl_bind_s success\n");
+          fprintf( stderr, "LDAP-AUTH: ldap_sasl_bind_s success\n");
         break;
       case LDAP_INVALID_CREDENTIALS:
         LOGERROR( "ldap_binddn: Invalid Credentials\n" );
@@ -745,9 +688,9 @@ _authentication_thread( void *arg )
       /** TODO authenticate user */
       if (DODEBUG (auth_context->verb)) {
         #if 0
-          fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s Password:%s\n", auth_context->username, auth_context->password);
+          fprintf (stderr, "LDAP-AUTH: Authenticating Username:%s Password:%s\n", auth_context->username, auth_context->password);
         #else
-          fprintf (stderr, "AUTH-LDAP: Authenticating Username:%s\n", auth_context->username );
+          fprintf (stderr, "LDAP-AUTH: Authenticating Username:%s\n", auth_context->username );
         #endif
       }
       rc = ldap_binddn( ldap, userdn, auth_context->password );
