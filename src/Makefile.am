@@ -1,6 +1,6 @@
 #ACLOCAL_AMFLAGS = -I m4 $(ACLOCAL_AMFLAGS)
 #bin_PROGRAMS = openvpn-ldap-rules
-#lib_LIBRARIES = openvpn-auth-ldap.a
+#lib_LIBRARIES = libopenvpn-ldap-auth.a
 lib_LTLIBRARIES = libopenvpn-ldap-auth.la
 
 auth_ldap_SOURCES = utils.h utils.c \
@@ -11,7 +11,7 @@ auth_ldap_SOURCES = utils.h utils.c \
 #openvpn_ldap_rules_SOURCES = openvpn-ldap-rules.c \
 #					$(auth_ldap_SOURCES)
 
-#openvpn_auth_ldap_a_SOURCES = auth-ldap.c \
+#libopenvpn_ldap_auth_a_SOURCES = ldap-auth.c \
 #				$(auth_ldap_SOURCES)
 
 libopenvpn_ldap_auth_la_SOURCES = ldap-auth.c \
@@ -19,8 +19,5 @@ libopenvpn_ldap_auth_la_SOURCES = ldap-auth.c \
 
 #libopenvpn_auth_ldap_la_LDFLAGS =  -export-dynamic $(LDFLAGS)
 
-#SUIDMODE = -o root -m 4755
 
-#install-data-hook:
-#	-$(INSTALL_PROGRAM) $(bin_PROGRAMS) $(SUIDMODE) $(DESTDIR)$(bindir)/openvpnstats-snmp
 

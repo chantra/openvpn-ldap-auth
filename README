@@ -2,6 +2,7 @@ Dependencies:
 -------------
 libldap
 libpthread
+libtool
 
 Installation:
 -------------

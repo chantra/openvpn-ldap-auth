@@ -54,6 +54,7 @@ int main(int argc, const char *argv[]) {
 	const char *envp[6]; /* username, password, verb, ifconfig_pool_remote_ip, NULL */
 	char username[30];
 	char *password;
+	int loops;
 	int err;
   pid_t pid = getpid();
   char command[100];
@@ -67,6 +68,12 @@ int main(int argc, const char *argv[]) {
   }
 
 	password = getpass("Password: ");
+
+  printf("Number of authentication loops: ");
+  if(!scanf("%d", &loops)){
+    fprintf(stderr, "Could not read loops number\n");
+    return 1;
+  }
 
 	/* Set up username and password */
 	envp[0] = malloc(sizeof(username_template) + strlen(username));
@@ -89,8 +96,7 @@ int main(int argc, const char *argv[]) {
 		errx(1, "Initialization Failed!\n");
 
 	/* Authenticate */
-  int loop = 1;
-  for( ; loop; --loop ){
+  for( ; loops; --loops ){
     err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp);
     if (err == OPENVPN_PLUGIN_FUNC_ERROR) {
       printf("Authorization Failed!\n");
