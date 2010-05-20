@@ -29,7 +29,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define STRPRINT_IFSET(a,prefix) if(a) fprintf(stdout, "%s:\t%s\n", prefix, a);
+#define STRPRINT_IFSET(a,prefix) if(a) fprintf(stderr, "%s:\t%s\n", prefix, a);
 #define STRDUP_IFNOTSET(a,b) if(!a && b) a=strdup(b);
 //#define STRDUP_IFNOTSET_NOTNULL(a, b) if( b ) STRDUP_IFNOTSET(a,b)
 

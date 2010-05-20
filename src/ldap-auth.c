@@ -6,7 +6,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  * 
- * auth-ldap.c
+ * ldap-auth.c
  * OpenVPN LDAP authentication plugin
  *
  *  Copyright (C) 2009 Emmanuel Bretelle <chantra@debuntu.org>
@@ -52,17 +52,6 @@
 #include "list.h"
 
 #define DODEBUG(verb) ((verb) >= 4)
-#if 0
-/* Command codes for foreground -> background communication */
-#define COMMAND_VERIFY 0
-#define COMMAND_EXIT   1
-
-/* Response codes for background -> foreground communication */
-#define RESPONSE_INIT_SUCCEEDED   10
-#define RESPONSE_INIT_FAILED      11
-#define RESPONSE_VERIFY_SUCCEEDED 12
-#define RESPONSE_VERIFY_FAILED    13
-#endif /* if 0 */
 
 /**
  * Plugin state, used by foreground
@@ -191,6 +180,24 @@ get_env (const char *name, const char *envp[])
 }
 
 /*
+ * Given an environmental variable name, dumps
+ * the envp array values.
+ */
+static void
+dump_env (const char *envp[])
+{
+  
+  fprintf (stderr, "//START of dump_env\\\\\n");
+  if (envp){
+    int i;
+    for (i = 0; envp[i]; ++i)
+      fprintf (stderr, "%s\n", envp[i]);
+  }
+  fprintf (stderr, "//END of dump_env\\\\\n");
+}
+
+
+/*
  * Return the length of a string array
  */
 static int
@@ -235,60 +242,6 @@ daemonize (const char *envp[])
 
 #endif
 
-#if 0
-/*
- * Close most of parent's fds.
- * Keep stdin/stdout/stderr, plus one
- * other fd which is presumed to be
- * our pipe back to parent.
- * Admittedly, a bit of a kludge,
- * but posix doesn't give us a kind
- * of FD_CLOEXEC which will stop
- * fds from crossing a fork().
- */
-static void
-close_fds_except (int keep)
-{
-  int i;
-  closelog ();
-  for (i = 3; i <= 100; ++i)
-    {
-      if (i != keep)
-	close (i);
-    }
-}
-
-/*
- * Usually we ignore signals, because our parent will
- * deal with them.
- */
-static void
-set_signals (void)
-{
-  signal (SIGTERM, SIG_DFL);
-
-  signal (SIGINT, SIG_IGN);
-  signal (SIGHUP, SIG_IGN);
-  signal (SIGUSR1, SIG_IGN);
-  signal (SIGUSR2, SIG_IGN);
-  signal (SIGPIPE, SIG_IGN);
-}
-
-/*
- * Return 1 if query matches match.
- */
-static int
-name_value_match (const char *query, const char *match)
-{
-  while (!isalnum (*query))
-    {
-      if (*query == '\0')
-	return 0;
-      ++query;
-    }
-  return strncasecmp (match, query, strlen (match)) == 0;
-}
-#endif
 OPENVPN_EXPORT openvpn_plugin_handle_t
 openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char *envp[])
 {
@@ -319,7 +272,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
    */
   *type_mask = OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY);
 
-  while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:b:f:t:WZ" ) ) != - 1 ){
+   while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:b:f:t:WZ" ) ) != - 1 ){
     switch( rc ) {
       case 'H':
         context->config->uri = strdup(optarg);
@@ -463,37 +416,6 @@ connect_ldap( auth_context_t *auth_context ){
       LOGWARNING( "ldap_start_tls_s TLS context already exist\n" );
     }
   }
-#if 0
-  if( bind ){
-    if (DODEBUG (auth_context->verb))
-      fprintf( stderr, "LDAP-AUTH: LDAP binding with user %s\n", (config->binddn ? config->binddn: "Anonymous" ) );
-    
-    rc = ldap_binddn( ldap, config->binddn, config->bindpw );
-/** made redundant per ldap_binddn function
-    if( config->bindpw && strlen(config->bindpw) ){
-      bv.bv_len = strlen(config->bindpw);
-      bv.bv_val = config->bindpw;
-    }else{
-      bv.bv_len = 0;
-      bv.bv_val = NULL;
-    }
-    rc = ldap_sasl_bind_s( ldap, config->binddn, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &bv2);
-*/  
-    switch( rc ){
-      case LDAP_SUCCESS:
-        if( DODEBUG( auth_context->verb ) )
-          fprintf( stderr, "LDAP-AUTH: ldap_sasl_bind_s success\n");
-        break;
-      case LDAP_INVALID_CREDENTIALS:
-        LOGERROR( "ldap_binddn: Invalid Credentials\n" );
-        goto connect_ldap_error;
-      default:
-        LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-        goto connect_ldap_error;
-    }
-    
-  }
-#endif
   return ldap;
 
 connect_ldap_error:
@@ -650,11 +572,7 @@ _authentication_thread( void *arg )
   char *userdn = NULL;
   auth_context_t *auth_context = ( auth_context_t * )arg;
   config_t *config = auth_context->config;
-#if 0
-  unsigned int slp = 6;
-  LOGINFO( "Sleep %d sec\n", slp);
-  sleep(slp);
-#endif
+
   /* Connection to LDAP backend */
   ldap = connect_ldap( auth_context );
   if( ldap == NULL ){
@@ -748,7 +666,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   const char *password = get_env ("password", envp);
   const char *auth_control_file = get_env ( "auth_control_file", envp );
 
-  if( type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY ){
+  if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY){
 
     /* required parameters check */
     if (!username){
