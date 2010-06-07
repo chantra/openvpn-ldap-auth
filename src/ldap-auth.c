@@ -50,10 +50,18 @@
 #include "cnf.h"
 #include "utils.h"
 #include "debug.h"
+#include "action.h"
 #include "list.h"
 
 #define DODEBUG(verb) ((verb) >= 4)
 
+pthread_mutex_t    action_mutex;
+pthread_cond_t     action_cond;
+pthread_attr_t     action_thread_attr;
+pthread_t          action_thread;
+
+/* forward declaration of main loop */
+static void *action_thread_mail_loop (void *c);
 /**
  * Plugin state, used by foreground
  */
@@ -65,8 +73,8 @@ typedef struct ldap_context
 
   /* Verbosity level of OpenVPN */
   int verb;
-  /* list of pending threads*/
-  list_t *lthread;
+  /* list of pending action to execute*/
+  list_t *action_list;
 
 } ldap_context_t;
 
@@ -83,6 +91,17 @@ typedef struct auth_context
   char            *auth_control_file;
 } auth_context_t;
 
+void
+action_push( list_t *list, action_t *action)
+{
+  pthread_mutex_lock( &action_mutex );
+  list_append( list, ( void * )action ); 
+  if( list_length( list ) == 1 ){
+    pthread_cond_signal( &action_cond );
+    LOGINFO( "Sent signal to authenticating loop\n" );
+  }
+  pthread_mutex_unlock( &action_mutex );
+}
 /** 
  * Allocate Authentication context resources
  */
@@ -116,6 +135,7 @@ void
 ldap_context_free( ldap_context_t *l ){
   if( !l ) return;
   if( l->config ) config_free( l->config );
+  if( l->action_list) list_free( l->action_list, NULL );
   free( l );
 }
 
@@ -131,6 +151,11 @@ ldap_context_new( void ){
   memset( l, 0, sizeof( ldap_context_t ) );
   l->config = config_new( );
   if( !l->config ){
+    ldap_context_free( l );
+    return NULL;
+  }
+  l->action_list = list_new( );
+  if( !l->action_list ){
     ldap_context_free( l );
     return NULL;
   }
@@ -333,12 +358,41 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
       config_dump( context->config ); 
 
 
-  return (openvpn_plugin_handle_t) context;
+  /* set up mutex/cond */
+  pthread_mutex_init (&action_mutex, NULL);
+  pthread_cond_init (&action_cond, NULL);
 
- error:
+  /* start our authentication thread */
+  pthread_attr_setdetachstate(&action_thread_attr, PTHREAD_CREATE_JOINABLE);
+  rc = pthread_create(&action_thread, &action_thread_attr, action_thread_mail_loop, context);
+  
+  switch( rc ){
+    case EAGAIN:
+      LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
+      break;
+    case EINVAL:
+      LOGERROR( "pthread_create returned EINVAL: invalid attributes\n" );
+      break;
+    case EPERM:
+      LOGERROR( "pthread_create returned EPERM: no permission to create thread\n" );
+      break;
+    case 0:
+      break;
+    default:
+      LOGERROR( "pthread_create returned an unhandled value: %d\n", rc );
+  }
+  if( rc == 0)
+    return (openvpn_plugin_handle_t) context;
+
+  pthread_attr_destroy( &action_thread_attr );
+  pthread_mutex_destroy( &action_mutex );
+  pthread_cond_destroy( &action_cond );
+
+error:
   if ( context ){
-    if( context->lthread ){
-      list_free( context->lthread, NULL );
+    if( context->action_list ){
+      /* TODO will most likely need a custom free function */
+      list_free( context->action_list, NULL );
     }
     ldap_context_free (context);
   }
@@ -657,6 +711,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   ldap_context_t *context = (ldap_context_t *) handle;
   auth_context_t *auth_context = NULL;
   pthread_t tid;
+  action_t *action = NULL;
 
   
   config_t *config = context->config;
@@ -691,6 +746,11 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
       auth_context_free( auth_context );
       return res;
     }
+    auth_context_free( auth_context );
+    action = action_new( );
+    action->type = LDAP_AUTH_ACTION_AUTH;
+    action_push( context->action_list, action );
+#if 0
     /* now we can trigger our authentication thread */
     //la_memset( tid, 0, sizeof( pthread_t ) );
     rc = pthread_create( &tid, NULL, _authentication_thread, auth_context );
@@ -714,7 +774,8 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
       default:
         LOGERROR( "pthread_create returned an unhandled value: %d\n", rc );
     }
-    return res;
+#endif
+    return OPENVPN_PLUGIN_FUNC_DEFERRED;
     
   }
   //const char *ip = get_env ("ifconfig_pool_remote_ip", envp );
@@ -727,12 +788,22 @@ OPENVPN_EXPORT void
 openvpn_plugin_close_v1 (openvpn_plugin_handle_t handle)
 {
   ldap_context_t *context = (ldap_context_t *) handle;
+  action_t *action = action_new( );
 
   if (DODEBUG (context->verb))
     LOGINFO( "close\n" );
-
+  if( action){
+    action->type = LDAP_AUTH_ACTION_QUIT;
+    action_push( context->action_list, action );
+    if( DODEBUG( context->verb ) )
+      LOGINFO ("Waiting for thread to return\n");
+    pthread_join( action_thread, NULL );
+    pthread_attr_destroy( &action_thread_attr );
+    pthread_mutex_destroy( &action_mutex );
+    pthread_cond_destroy( &action_cond );
+  }
   ldap_context_free( context );
-//  pthread_exit(NULL);
+  //pthread_exit(NULL);
 }
 
 OPENVPN_EXPORT void
@@ -744,3 +815,40 @@ openvpn_plugin_abort_v1 (openvpn_plugin_handle_t handle)
   ldap_context_free( context );
 }
 
+void *
+action_thread_mail_loop (void *c)
+{
+  ldap_context_t *context = c;
+  action_t *action = NULL;
+  int loop = 1;
+  while( loop ){
+    pthread_mutex_lock (&action_mutex);
+    if (list_length (context->action_list) == 0){
+      pthread_cond_wait (&action_cond, &action_mutex);
+      if (DODEBUG (context->verb) ){
+        LOGINFO( "Signal received, there is some action!\n");
+      } 
+    }
+    /* get the action item */
+    action = list_remove_item_at (context->action_list, 0);
+    pthread_mutex_unlock (&action_mutex);
+    /* TODO, do some action */
+    if (action){
+      switch (action->type){
+        case LDAP_AUTH_ACTION_AUTH:
+          fprintf (stderr, "Authentication requested\n");
+          break;
+        case LDAP_AUTH_ACTION_QUIT:
+          fprintf (stderr, "Terminating\n");
+          loop = 0;
+          break;
+        default:
+          if (DODEBUG (context->verb) ){
+            LOGINFO( "Unknown action %d\n", action->type);
+          }
+      }
+      action_free( action );
+    }
+  }
+  pthread_exit (NULL);
+}
