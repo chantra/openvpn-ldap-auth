@@ -423,6 +423,12 @@ openvpn_plugin_abort_v1 (openvpn_plugin_handle_t handle)
   ldap_context_free( context );
 }
 
+OPENVPN_EXPORT int
+openvpn_plugin_select_initialization_point_v1 (void)
+{
+  return OPENVPN_PLUGIN_INIT_POST_UID_CHANGE;
+}
+
 void *
 action_thread_main_loop (void *c)
 {
