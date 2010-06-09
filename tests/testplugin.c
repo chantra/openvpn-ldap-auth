@@ -87,7 +87,7 @@ int main(int argc, const char *argv[]) {
 	/* Remote Pool IP */
 	envp[2] = "ifconfig_pool_remote_ip=10.0.50.1";
   envp[3] = "verb=4";
-  envp[4] = "auth_control_file=foobar_ctrl_file.txt";
+  envp[4] = "auth_control_file=/tmp/foobar_ctrl_file.txt";
 	envp[5] = NULL;
 
 	handle = openvpn_plugin_open_v1(&type, argv, envp);
@@ -106,7 +106,7 @@ int main(int argc, const char *argv[]) {
       printf("Authorization Deferred!\n");
     }
   }
-  printf( "Sleeping %d second waiting for threads to exits...\n", SLEEP_TIME );
+  printf( "Sleeping %d seconds to let the threads do some job...\n", SLEEP_TIME );
   sleep( SLEEP_TIME );
   goto free_exit;
 	/* Client Connect */
@@ -128,7 +128,8 @@ free_exit:
   sprintf(command, "lsof -n -p %d", pid);
   //system(command);
 	openvpn_plugin_close_v1(handle);
-
+  printf( "Sleeping %d seconds...\n", SLEEP_TIME );
+  sleep( SLEEP_TIME );
 	free((char *) envp[0]);
 	free((char *) envp[1]);
 

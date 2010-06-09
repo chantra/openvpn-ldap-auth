@@ -34,9 +34,12 @@ action_new( )
 }
 
 void
-action_free( action_t *a)
+action_free( void *a)
 {
-  if( a ){
-    la_free( a );
+  action_t *action = a;
+  if( action ){
+    if( action->context_free_func )
+      action->context_free_func( action->context );
+    la_free( action );
   }
 }

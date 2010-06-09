@@ -1,0 +1,81 @@
+/**
+ * la_ldap.h
+ * vim: tabstop=2 softtabstop=2 shiftwidth=2 expandtab
+ * Copyright (C) 2010 Emmanuel Bretelle <chantra@debuntu.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ */
+
+#ifndef __LA_LDAP_H__
+#define __LA_LDAP_H__
+
+#include "cnf.h"
+#include "list.h"
+#include "utils.h"
+#include "action.h"
+
+typedef struct ldap_context
+{
+
+  /* Parsed config info */
+  config_t *config;
+
+  /* Verbosity level of OpenVPN */
+  int verb;
+  /* list of pending action to execute*/
+  list_t *action_list;
+
+} ldap_context_t;
+
+
+/**
+ * Data to be passed to a 
+ * thread for user authentication
+ */
+typedef struct auth_context
+{
+  char            *username;
+  char            *password;
+  char            *auth_control_file;
+} auth_context_t;
+
+/** 
+ * Allocate Authentication context resources
+ */
+extern auth_context_t * auth_context_new( void );
+
+/**
+ * Free Authentication context resources
+ */
+extern void auth_context_free( auth_context_t *a );
+
+/**
+ * Free LDAP context resources
+ */
+extern void ldap_context_free( ldap_context_t *l );
+/**
+ * Allocate LDAP context resources
+ * return NULL on memory allocation issue
+ */
+
+extern ldap_context_t * ldap_context_new( void );
+
+/**
+ * handle authentication action
+ */
+extern int la_ldap_handle_authentication( ldap_context_t *l, action_t *a);
+
+#endif /* __LA_LDAP_H__ */

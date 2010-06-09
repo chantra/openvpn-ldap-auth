@@ -52,6 +52,7 @@
 #include "debug.h"
 #include "action.h"
 #include "list.h"
+#include "la_ldap.h"
 
 #define DODEBUG(verb) ((verb) >= 4)
 
@@ -61,107 +62,22 @@ pthread_attr_t     action_thread_attr;
 pthread_t          action_thread;
 
 /* forward declaration of main loop */
-static void *action_thread_mail_loop (void *c);
-/**
- * Plugin state, used by foreground
- */
-typedef struct ldap_context
-{
-
-  /* Parsed config info */
-  config_t *config;
-
-  /* Verbosity level of OpenVPN */
-  int verb;
-  /* list of pending action to execute*/
-  list_t *action_list;
-
-} ldap_context_t;
-
-/**
- * Data to be passed to a 
- * thread for user authentication
- */
-typedef struct auth_context
-{
-  config_t        *config;
-  int             verb;
-  char            *username;
-  char            *password;
-  char            *auth_control_file;
-} auth_context_t;
+static void *action_thread_main_loop (void *c);
 
 void
 action_push( list_t *list, action_t *action)
 {
   pthread_mutex_lock( &action_mutex );
-  list_append( list, ( void * )action ); 
+  if( action->type == LDAP_AUTH_ACTION_QUIT )
+    list_prepend( list, ( void * )action );
+  else
+    list_append( list, ( void * )action ); 
   if( list_length( list ) == 1 ){
     pthread_cond_signal( &action_cond );
     LOGINFO( "Sent signal to authenticating loop\n" );
   }
   pthread_mutex_unlock( &action_mutex );
 }
-/** 
- * Allocate Authentication context resources
- */
-auth_context_t *
-auth_context_new( void ){
-  auth_context_t *a = NULL;
-  a = la_malloc( sizeof( auth_context_t ) ); 
-  if( a ) la_memset( a, 0, sizeof( auth_context_t ) );  
-  return a;
-}
-
-/**
- * Free Authentication context resources
- */
-void
-auth_context_free( auth_context_t *a ){
-  if( !a ) return;
-  if( a->config ) config_free( a->config );
-  if( a->username ) free( a->username );
-  if( a->password ) free( a->password );
-  if( a->auth_control_file ) free( a->auth_control_file );
-  free( a );
-  return;
-}
-
-/**
- * Free LDAP context resources
- */
-
-void
-ldap_context_free( ldap_context_t *l ){
-  if( !l ) return;
-  if( l->config ) config_free( l->config );
-  if( l->action_list) list_free( l->action_list, NULL );
-  free( l );
-}
-
-/**
- * Allocate LDAP context resources
- * return NULL on memory allocation issue
- */
-ldap_context_t *
-ldap_context_new( void ){
-  ldap_context_t *l;
-  l = malloc( sizeof( ldap_context_t ) );
-  if( !l ) return NULL;
-  memset( l, 0, sizeof( ldap_context_t ) );
-  l->config = config_new( );
-  if( !l->config ){
-    ldap_context_free( l );
-    return NULL;
-  }
-  l->action_list = list_new( );
-  if( !l->action_list ){
-    ldap_context_free( l );
-    return NULL;
-  }
-  return l;
-}
-
 /*
  * Name/Value pairs for conversation function.
  * Special Values:
@@ -364,7 +280,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
 
   /* start our authentication thread */
   pthread_attr_setdetachstate(&action_thread_attr, PTHREAD_CREATE_JOINABLE);
-  rc = pthread_create(&action_thread, &action_thread_attr, action_thread_mail_loop, context);
+  rc = pthread_create(&action_thread, &action_thread_attr, action_thread_main_loop, context);
   
   switch( rc ){
     case EAGAIN:
@@ -384,6 +300,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   if( rc == 0)
     return (openvpn_plugin_handle_t) context;
 
+  /* Failed to initialize, free resources */
   pthread_attr_destroy( &action_thread_attr );
   pthread_mutex_destroy( &action_mutex );
   pthread_cond_destroy( &action_cond );
@@ -397,197 +314,6 @@ error:
     ldap_context_free (context);
   }
   return NULL;
-}
-
-
-/**
- * bind given ldap connection with username and password
- * Anonymous binding is achived by providing NULL username and password
- */
-
-int
-ldap_binddn( LDAP *ldap, const char *username, const char *password ){
-  int rc;
-  struct berval bv, *servcred = NULL;
-
-  if( password && strlen(password) ){
-    bv.bv_len = strlen(password);
-    bv.bv_val = (char *)password;
-  }else{
-    bv.bv_len = 0;
-    bv.bv_val = NULL;
-  }
-  rc = ldap_sasl_bind_s( ldap, username, LDAP_SASL_SIMPLE, &bv, NULL, NULL, &servcred);
-  if( servcred ) ber_bvfree( servcred );
-  return rc;
-}
-
-/**
- * Set up a connection to LDAP given the context configuration
- * Do not bind to LDAP, use ldap_bindn for that purpose
- */
-LDAP *
-connect_ldap( auth_context_t *auth_context ){
-  LDAP *ldap;
-  int rc;
-  config_t *config = auth_context->config;
-  int ldap_tls_require_cert;
-  struct timeval timeout;
-
-  /* init connection to ldap */
-  rc = ldap_initialize(&ldap, config->uri);
-  if( rc!= LDAP_SUCCESS ){
-    LOGERROR( "ldap_initialize returned (%d) \"%s\" : %s\n", rc, ldap_err2string(rc), strerror(errno) );
-    goto connect_ldap_error;
-  }
-  /* Version */
-  rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap_version));
-  if( rc != LDAP_OPT_SUCCESS ){
-    LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"\n", config->ldap_version, rc, ldap_err2string(rc) );
-    goto connect_ldap_error;
-  }
-  /* Timeout */
-  timeout.tv_sec = config->timeout;
-  timeout.tv_usec = 0;
-  rc = ldap_set_option(ldap, LDAP_OPT_NETWORK_TIMEOUT, &timeout );
-  if( rc != LDAP_OPT_SUCCESS ){
-    LOGERROR( "ldap_set_option timeout %ds returned (%d) \"%s\"\n", config->timeout, rc, ldap_err2string(rc) );
-    goto connect_ldap_error;
-  }
-  /* SSL/TLS */
-  if( strcmp( config->ssl, "start_tls" ) == 0){
-    /*TODO handle certif properly */
-    ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
-    rc = ldap_set_option(ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, &ldap_tls_require_cert );
-    if( rc != LDAP_OPT_SUCCESS ){
-      LOGERROR( "ldap_set_option TLS_REQ_CERT returned (%d) \"%s\"\n", rc, ldap_err2string(rc) );
-      goto connect_ldap_error;
-    }
-    rc = ldap_start_tls_s( ldap, NULL, NULL );
-    if( rc != LDAP_SUCCESS && rc !=  LDAP_LOCAL_ERROR ){
-      LOGERROR( "ldap_start_tls_s returned (%d) \"%s\"\n", rc, ldap_err2string(rc) );
-      goto connect_ldap_error;
-    }else if( rc == LDAP_LOCAL_ERROR ){
-      LOGWARNING( "ldap_start_tls_s TLS context already exist\n" );
-    }
-  }
-  return ldap;
-
-connect_ldap_error:
-  rc = ldap_unbind_ext_s( ldap, NULL, NULL );
-  if( rc != LDAP_SUCCESS ){
-    LOGERROR( "ldap_unbind_ext_s returned: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-  }
-  return NULL;
-}
-
-
-/**
- * Search for a user's DN
- * Given a search_filter and context, will search for 
- */
-char *
-ldap_find_user( LDAP *ldap, auth_context_t *auth_context, const char *username ){
-  struct timeval timeout;
-  char *attrs[] = { NULL };
-  char          *dn = NULL;
-  LDAPMessage *e, *result;
-  config_t *config = NULL;
-  char *search_filter = NULL;
-  int rc;
-  char *userdn = NULL;
-
-  /* arguments sanity check */
-  if( !auth_context || !username || !ldap){
-    LOGERROR("ldap_find_user missing required parameter\n");
-    return NULL;
-  }
-  config = auth_context->config;
-  
-  /* initialise timeout values */
-  timeout.tv_sec = config->timeout;
-  timeout.tv_usec = 0;
-  if( username && config->search_filter ){
-    search_filter = str_replace(config->search_filter, "%u", username );
-  }
-  if( DODEBUG( auth_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->basedn );
-
-  rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
-  if( rc == LDAP_SUCCESS ){
-    /* Check how many entries were found. Only one should be returned */
-    int nbrow = ldap_count_entries( ldap, result );
-    if( nbrow > 1 ){
-      LOGERROR( "ldap_search_ext_s returned %d results, only 1 is supported\n", ldap_count_entries( ldap, result ) );
-    }else if( nbrow == 0 ){
-      LOGWARNING( "ldap_search_ext_s: unknown user %s\n", username );
-    }else if( nbrow == 1 ){
-      /* get the first entry (and only) */
-      e =  ldap_first_entry( ldap, result );
-      if( e != NULL ){
-        dn = ldap_get_dn( ldap, e );
-        if( DODEBUG( auth_context->verb ) )
-          LOGINFO("found dn: %s\n", dn );
-      }else{
-        LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
-      }
-    }
-    /* free the returned result */
-    ldap_msgfree( result );
-  }
-  if( dn ){
-    userdn = strdup( dn );
-    /* finally, if a DN was returned, free it */
-    if( dn ) ldap_memfree( dn );
-  }
-  if( search_filter ) free( search_filter );
-  return userdn;
-}
-
-
-int
-ldap_group_membership( LDAP *ldap, auth_context_t *auth_context, char *userdn ){
-  struct timeval timeout;
-  char *attrs[] = { NULL };
-  LDAPMessage *result;
-  config_t *config = NULL;
-  char *search_filter = NULL;
-  int rc;
-  int res = 1;
-  char filter[]="(&(%s=%s)(%s))";
-
-  /* arguments sanity check */
-  if( !auth_context || !userdn || !ldap){
-    LOGERROR("ldap_group_membership missing required parameter\n");
-    return 1;
-  }
-  config = auth_context->config;
-  
-  /* initialise timeout values */
-  timeout.tv_sec = config->timeout;
-  timeout.tv_usec = 0;
-  if( userdn && config->group_search_filter && config->member_attribute ){
-    search_filter = strdupf(filter,config->member_attribute, userdn, config->group_search_filter);
-  }
-  if( DODEBUG( auth_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->groupdn );
-
-  rc = ldap_search_ext_s( ldap, config->groupdn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
-  if( rc == LDAP_SUCCESS ){
-    /* Check how many entries were found. Only one should be returned */
-    int nbrow = ldap_count_entries( ldap, result );
-    if( nbrow < 1 ){
-      LOGWARNING( "ldap_search_ext_s: user %s do not match group filter %s\n", userdn, search_filter );
-    }else{
-      if( DODEBUG( auth_context->verb ) )
-        LOGINFO( "User %s matches %d groups with filter %s\n", userdn, nbrow, search_filter );
-      res = 0;
-    }
-    /* free the returned result */
-    ldap_msgfree( result );
-  }
-  if( search_filter ) free( search_filter );
-  return res;
 }
 
 /* write a value to auth_control_file */
@@ -613,97 +339,6 @@ write_to_auth_control_file( char *auth_control_file, char value )
   return rc == 0;
 }
 
-/**
- * thread handling user authentication
- */
-void *
-_authentication_thread( void *arg )
-{
-
-  LDAP *ldap = NULL;
-  int rc;
-  int res = OPENVPN_PLUGIN_FUNC_ERROR;
-
-  char *userdn = NULL;
-  auth_context_t *auth_context = ( auth_context_t * )arg;
-  config_t *config = auth_context->config;
-
-  /* Connection to LDAP backend */
-  ldap = connect_ldap( auth_context );
-  if( ldap == NULL ){
-    LOGERROR( "Could not connect to URI %s\n", config->uri );
-    goto auth_thread_exit;        
-  }
-  /* bind to LDAP server anonymous or authenticated */
-  rc = ldap_binddn( ldap, config->binddn, config->bindpw );
-  switch( rc ){
-    case LDAP_SUCCESS:
-      if( DODEBUG( auth_context->verb ) )
-        LOGINFO( "ldap_sasl_bind_s %s success\n", config->binddn ? config->binddn : "Anonymous" );
-        break;
-    case LDAP_INVALID_CREDENTIALS:
-      LOGERROR( "ldap_binddn: Invalid Credentials\n" );
-      goto auth_thread_free;
-    default:
-      LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-      goto auth_thread_free;
-  }
-
-  userdn = ldap_find_user( ldap, auth_context, auth_context->username );
-  if( !userdn ){
-    LOGWARNING( "LDAP user *%s* was not found \n", auth_context->username );
-    goto auth_thread_free;
-  }
-  
-  /* OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY */
-  if (auth_context && auth_context->config ){
-      if (auth_context->username && strlen (auth_context->username) > 0 && auth_context->password){
-      /** TODO authenticate user */
-      if (DODEBUG (auth_context->verb)) {
-        #if 0
-          fprintf (stderr, "LDAP-AUTH: Authenticating Username:%s Password:%s\n", auth_context->username, auth_context->password);
-        #else
-          fprintf (stderr, "LDAP-AUTH: Authenticating Username:%s\n", auth_context->username );
-        #endif
-      }
-      rc = ldap_binddn( ldap, userdn, auth_context->password );
-      if( rc != LDAP_SUCCESS ){
-        LOGERROR( "rebinding: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-      }else{
-        /* success, let set our return value to SUCCESS */
-        if( DODEBUG( auth_context->verb ) )
-          LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
-        /* check if user belong to right groups */
-        if( config->groupdn && config->group_search_filter && config->member_attribute ){
-            rc = ldap_group_membership( ldap, auth_context, userdn );
-            if( rc == 0 ){
-              res = OPENVPN_PLUGIN_FUNC_SUCCESS;
-            }
-        }else{
-          res = OPENVPN_PLUGIN_FUNC_SUCCESS;
-        }
-      }
-    }
-  }
-auth_thread_free:
-  rc = ldap_unbind_ext_s( ldap, NULL, NULL );
-  if( rc != LDAP_SUCCESS ){
-    LOGERROR( "ldap_unbind_ext_s: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
-  }
-//func_v1_exit_free:
-  if( userdn ) free( userdn );
-
-auth_thread_exit:
-  /* we need to write the result to  auth_control_file */
-  if( DODEBUG(auth_context->verb ) ){
-    LOGINFO( "User %s: Writing %c to file %s\n", auth_context->username, res == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0', auth_context->auth_control_file );
-  }
-  rc = write_to_auth_control_file( auth_context->auth_control_file, res == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0' );
-  auth_context_free( auth_context );
-  pthread_exit( NULL );
-  return NULL;
-
-}
 
 OPENVPN_EXPORT int
 openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const char *argv[], const char *envp[])
@@ -735,52 +370,23 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
       LOGERROR( "Could not allocate auth_context before calling thread\n" );
       return res;
     }
-    /* FIXME might not need to dup config struct */
-    auth_context->config = config_dup( config );
-    auth_context->verb = context->verb;
     if( username ) auth_context->username = strdup( username );
     if( password ) auth_context->password = strdup( password );
     if( auth_control_file ) auth_context->auth_control_file = strdup( auth_control_file );
     /* If some argument were missing or could not be duplicate */
-    if( !(auth_context->config && auth_context->username && auth_context->password && auth_context->auth_control_file ) ){
+    if( !(auth_context->username && auth_context->password && auth_context->auth_control_file ) ){
       auth_context_free( auth_context );
       return res;
     }
-    auth_context_free( auth_context );
     action = action_new( );
     action->type = LDAP_AUTH_ACTION_AUTH;
+    action->context = auth_context;
+    action->context_free_func = auth_context_free;
     action_push( context->action_list, action );
-#if 0
-    /* now we can trigger our authentication thread */
-    //la_memset( tid, 0, sizeof( pthread_t ) );
-    rc = pthread_create( &tid, NULL, _authentication_thread, auth_context );
-    switch( rc ){
-      case EAGAIN:
-        LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
-        break;
-      case EINVAL:
-        LOGERROR( "pthread_create returned EINVAL: invalid attributes\n" );
-        break;
-      case EPERM:
-        LOGERROR( "pthread_create returned EPERM: no permission to create thread\n" );
-        break;
-      case 0:
-        pthread_detach( tid );
-        res = OPENVPN_PLUGIN_FUNC_DEFERRED;
-        if( DODEBUG( context->verb ) ){
-          LOGINFO( "pthread_create(authentication_thread) successful, deferring authentication\n" );
-        }
-        break;
-      default:
-        LOGERROR( "pthread_create returned an unhandled value: %d\n", rc );
-    }
-#endif
     return OPENVPN_PLUGIN_FUNC_DEFERRED;
     
   }
-  //const char *ip = get_env ("ifconfig_pool_remote_ip", envp );
 
-  
   return res;
 }
 
@@ -798,6 +404,8 @@ openvpn_plugin_close_v1 (openvpn_plugin_handle_t handle)
     if( DODEBUG( context->verb ) )
       LOGINFO ("Waiting for thread to return\n");
     pthread_join( action_thread, NULL );
+    if( DODEBUG( context->verb ) )
+      LOGINFO ("Thread returned queries left in queue: %d\n", list_length( context->action_list ));
     pthread_attr_destroy( &action_thread_attr );
     pthread_mutex_destroy( &action_mutex );
     pthread_cond_destroy( &action_cond );
@@ -816,10 +424,12 @@ openvpn_plugin_abort_v1 (openvpn_plugin_handle_t handle)
 }
 
 void *
-action_thread_mail_loop (void *c)
+action_thread_main_loop (void *c)
 {
   ldap_context_t *context = c;
   action_t *action = NULL;
+  int rc;
+
   int loop = 1;
   while( loop ){
     pthread_mutex_lock (&action_mutex);
@@ -836,10 +446,25 @@ action_thread_mail_loop (void *c)
     if (action){
       switch (action->type){
         case LDAP_AUTH_ACTION_AUTH:
-          fprintf (stderr, "Authentication requested\n");
+          if( DODEBUG(context->verb ) ){
+            LOGINFO( "Authentication requested for user %s\n",
+                      ((auth_context_t *)action->context)->username);
+          }
+          rc = la_ldap_handle_authentication( context, action );
+          /* we need to write the result to  auth_control_file */
+          if( DODEBUG(context->verb ) ){
+            LOGINFO( "User %s: Writing %c to file %s\n",
+                          ((auth_context_t *)action->context)->username,
+                          rc == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0',
+                          ((auth_context_t *)action->context)->auth_control_file);
+          }
+          write_to_auth_control_file ( ((auth_context_t *)action->context)->auth_control_file,
+                                        rc == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0');
           break;
         case LDAP_AUTH_ACTION_QUIT:
-          fprintf (stderr, "Terminating\n");
+          if( DODEBUG(context->verb ) ){
+            LOGINFO( "Authentication thread received ACTION_QUIT\n");
+          }
           loop = 0;
           break;
         default:

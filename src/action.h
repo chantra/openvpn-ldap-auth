@@ -30,9 +30,11 @@ enum ldap_auth_action {
 
 typedef struct action{
   enum ldap_auth_action type;
+  void *context; 
+  void (*context_free_func)( void *data ); 
 } action_t;
 
 extern action_t *action_new( void );
-extern void action_free( action_t *action );
+extern void action_free( void *action );
 
 #endif /* __ACTION_H__ */

@@ -7,6 +7,7 @@ auth_ldap_SOURCES = utils.h utils.c \
 							cnf.h cnf.c \
 							list.h list.c \
 							action.h action.c \
+							la_ldap.h la_ldap.c \
 							debug.h debug.c
 
 #openvpn_ldap_rules_SOURCES = openvpn-ldap-rules.c \
