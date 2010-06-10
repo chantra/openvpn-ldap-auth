@@ -193,6 +193,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   const char *configfile = NULL;
   int rc = 0;
 
+  *type_mask = 0;
   /*
    * Allocate our context
    */
@@ -204,7 +205,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   /*
    * Intercept the --auth-user-pass-verify callback.
    */
-  *type_mask = OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY);
+  *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY);
 
    while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:b:f:t:WZ" ) ) != - 1 ){
     switch( rc ) {
@@ -265,7 +266,9 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   if( DODEBUG( context->verb ) )
       config_dump( context->config ); 
 
-
+  if( context->config->default_gw_prefix && strlen( context->config->default_gw_prefix ) > 0 ){
+    *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2);
+  }
   /* set up mutex/cond */
   pthread_mutex_init (&action_mutex, NULL);
   pthread_cond_init (&action_cond, NULL);
@@ -329,7 +332,8 @@ write_to_auth_control_file( char *auth_control_file, char value )
 
 
 OPENVPN_EXPORT int
-openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const char *argv[], const char *envp[])
+openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle, const int type, const char *argv[],
+                        const char *envp[], void *per_client_context, struct openvpn_plugin_string_list **return_list)
 {
   ldap_context_t *context = (ldap_context_t *) handle;
   auth_context_t *auth_context = NULL;
@@ -345,7 +349,24 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   const char *password = get_env ("password", envp);
   const char *auth_control_file = get_env ( "auth_control_file", envp );
 
-  if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY){
+  if (type == OPENVPN_PLUGIN_CLIENT_CONNECT_V2){
+    if (!username){
+      LOGERROR("No username supplied to OpenVPN plugin");
+      return OPENVPN_PLUGIN_FUNC_ERROR;
+    }
+    if (!config->default_gw_prefix || strlen (config->default_gw_prefix) == 0)
+      return OPENVPN_PLUGIN_FUNC_SUCCESS;
+    /* do the username start with prefix? */
+    if( strncmp( config->default_gw_prefix, username, strlen( config->default_gw_prefix ) ) == 0 ){
+      *return_list = la_malloc( sizeof( struct openvpn_plugin_string_list ) );
+      if( *return_list != NULL){
+        (*return_list)->next = NULL;
+        (*return_list)->name = strdup( "config" );
+        (*return_list)->value = strdup( "push \"redirect-gateway def1 bypass-dhcp\"");
+      }
+    }
+    return OPENVPN_PLUGIN_FUNC_SUCCESS;
+  }else if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY){
 
     /* required parameters check */
     if (!username){
@@ -358,7 +379,16 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
       LOGERROR( "Could not allocate auth_context before calling thread\n" );
       return res;
     }
-    if( username ) auth_context->username = strdup( username );
+    if( username ){
+      /* check if we have the default_gw_prefix set
+          and if it matches user */
+      if( config->default_gw_prefix 
+          && strncmp( config->default_gw_prefix, username, strlen( config->default_gw_prefix ) ) == 0 ){
+        auth_context->username = strdup( username + strlen( config->default_gw_prefix ) );
+      }else{
+        auth_context->username = strdup( username );
+      }
+    }
     if( password ) auth_context->password = strdup( password );
     if( auth_control_file ) auth_context->auth_control_file = strdup( auth_control_file );
     /* If some argument were missing or could not be duplicate */

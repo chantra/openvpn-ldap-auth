@@ -97,7 +97,7 @@ int main(int argc, const char *argv[]) {
 
 	/* Authenticate */
   for( ; loops; --loops ){
-    err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp);
+    err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp, NULL, NULL);
     if (err == OPENVPN_PLUGIN_FUNC_ERROR) {
       printf("Authorization Failed!\n");
     } else if( err == OPENVPN_PLUGIN_FUNC_SUCCESS ) {
@@ -110,7 +110,7 @@ int main(int argc, const char *argv[]) {
   sleep( SLEEP_TIME );
   goto free_exit;
 	/* Client Connect */
-	err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_CLIENT_CONNECT, argv, envp);
+	err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_CLIENT_CONNECT_V2, argv, envp, NULL, NULL);
 	if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
 		printf("client-connect failed!\n");
 	} else {
@@ -118,7 +118,7 @@ int main(int argc, const char *argv[]) {
 	}
 
 	/* Client Disconnect */
-	err = openvpn_plugin_func_v1(handle, OPENVPN_PLUGIN_CLIENT_DISCONNECT, argv, envp);
+	err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_CLIENT_DISCONNECT, argv, envp, NULL, NULL);
 	if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
 		printf("client-disconnect failed!\n");
 	} else {

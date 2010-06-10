@@ -137,6 +137,7 @@ config_free( config_t *c ){
 	check_and_free( c->bindpw );
 	check_and_free( c->basedn );
   check_and_free( c->search_filter );
+  check_and_free( c->default_gw_prefix );
 	/* TLS */
   check_and_free( c->ssl );
 	check_and_free( c->tls_cacertfile );
@@ -201,6 +202,8 @@ config_parse_file( const char *filename, config_t *c ){
         if(!c->ldap_version) c->ldap_version = atoi(val);
       }else if ( !strcmp( arg, "search_filter" ) ){
         STRDUP_IFNOTSET(c->search_filter, val );
+      }else if ( !strcmp( arg, "default_gw_prefix" ) ){
+        STRDUP_IFNOTSET(c->default_gw_prefix, val );
       }else if ( !strcmp( arg, "ssl" ) ){
         STRDUP_IFNOTSET(c->ssl, val );        
       }else if ( !strcmp( arg, "tls_cacertfile" ) ){
