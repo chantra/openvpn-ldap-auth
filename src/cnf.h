@@ -30,8 +30,9 @@ typedef struct config{
 
   char			*basedn;
   int				ldap_version;
-
   char      *search_filter;
+
+  char      *default_gw_prefix;
 
   char			*ssl;
   char			*tls_cacertfile;
