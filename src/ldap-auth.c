@@ -59,7 +59,7 @@
 pthread_mutex_t    action_mutex;
 pthread_cond_t     action_cond;
 pthread_attr_t     action_thread_attr;
-pthread_t          action_thread;
+pthread_t          action_thread = 0;
 
 /* forward declaration of main loop */
 static void *action_thread_main_loop (void *c);
@@ -201,14 +201,6 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
     LOGERROR( "Failed to initialize context\n" );  
     goto error;
   }
-  /* create out pthread_t list */
-  /*
-  context->lthread = list_new( );
-  if( !context->lthread ){
-    LOGERROR( "Failed to initialize thread list\n" );
-    goto error;
-  }
-  */
   /*
    * Intercept the --auth-user-pass-verify callback.
    */
@@ -307,10 +299,6 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
 
 error:
   if ( context ){
-    if( context->action_list ){
-      /* TODO will most likely need a custom free function */
-      list_free( context->action_list, NULL );
-    }
     ldap_context_free (context);
   }
   return NULL;
@@ -418,9 +406,25 @@ OPENVPN_EXPORT void
 openvpn_plugin_abort_v1 (openvpn_plugin_handle_t handle)
 {
   ldap_context_t *context = (ldap_context_t *) handle;
-  if (DODEBUG (context->verb))
-    LOGINFO( "abort\n" );
-  ldap_context_free( context );
+  if (context) {
+    action_t *action = action_new( );
+
+    if (DODEBUG (context->verb))
+      LOGINFO( "close\n" );
+    if( action){
+      action->type = LDAP_AUTH_ACTION_QUIT;
+      action_push( context->action_list, action );
+      if( DODEBUG( context->verb ) )
+        LOGINFO ("Waiting for thread to return\n");
+      pthread_join( action_thread, NULL );
+      if( DODEBUG( context->verb ) )
+        LOGINFO ("Thread returned queries left in queue: %d\n", list_length( context->action_list ));
+      pthread_attr_destroy( &action_thread_attr );
+      pthread_mutex_destroy( &action_mutex );
+      pthread_cond_destroy( &action_cond );
+    }
+    ldap_context_free( context );
+  }
 }
 
 OPENVPN_EXPORT int
