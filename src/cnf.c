@@ -88,6 +88,10 @@ config_set_default( config_t *c){
 #ifdef OMEMBER_ATRIBUTE
   STRDUP_IFNOTSET(c->member_attribute, OMEMBER_ATRIBUTE );
 #endif
+#ifdef OREDIRECT_GATEWAY_FLAGS
+  STRDUP_IFNOTSET(c->redirect_gateway_flags, OREDIRECT_GATEWAY_FLAGS );
+#endif
+
 
 }
 
@@ -111,6 +115,9 @@ config_dup( config_t *c ){
   if( c->bindpw ) nc->bindpw = strdup( c->bindpw );
   if( c->basedn ) nc->basedn = strdup( c->basedn );
   nc->ldap_version = c->ldap_version;
+  if( c->search_filter ) nc->search_filter = strdup( c->search_filter );
+  if( c->redirect_gateway_prefix ) nc->redirect_gateway_prefix = strdup( c->redirect_gateway_prefix );
+  if( c->redirect_gateway_flags ) nc->redirect_gateway_flags = strdup( c->redirect_gateway_flags );
   if( c->search_filter ) nc->search_filter = strdup( c->search_filter );
   if( c->ssl ) nc->ssl = strdup( c->ssl );
   if( c->tls_cacertfile ) nc->tls_cacertfile = strdup( c->tls_cacertfile );
@@ -137,7 +144,8 @@ config_free( config_t *c ){
 	check_and_free( c->bindpw );
 	check_and_free( c->basedn );
   check_and_free( c->search_filter );
-  check_and_free( c->default_gw_prefix );
+  check_and_free( c->redirect_gateway_prefix );
+  check_and_free( c->redirect_gateway_flags );
 	/* TLS */
   check_and_free( c->ssl );
 	check_and_free( c->tls_cacertfile );
@@ -202,8 +210,10 @@ config_parse_file( const char *filename, config_t *c ){
         if(!c->ldap_version) c->ldap_version = atoi(val);
       }else if ( !strcmp( arg, "search_filter" ) ){
         STRDUP_IFNOTSET(c->search_filter, val );
-      }else if ( !strcmp( arg, "default_gw_prefix" ) ){
-        STRDUP_IFNOTSET(c->default_gw_prefix, val );
+      }else if ( !strcmp( arg, "redirect_gateway_prefix" ) ){
+        STRDUP_IFNOTSET(c->redirect_gateway_prefix, val );
+      }else if ( !strcmp( arg, "redirect_gateway_flags" ) ){
+        STRDUP_IFNOTSET(c->redirect_gateway_flags, val );
       }else if ( !strcmp( arg, "ssl" ) ){
         STRDUP_IFNOTSET(c->ssl, val );        
       }else if ( !strcmp( arg, "tls_cacertfile" ) ){
@@ -243,6 +253,9 @@ config_dump( config_t *c){
   STRPRINT_IFSET(c->groupdn,"GroupDN");
   STRPRINT_IFSET(c->group_search_filter, "Group Search Filter");
   STRPRINT_IFSET(c->member_attribute,"Member Attribute");
+  STRPRINT_IFSET(c->redirect_gateway_prefix,"Redirect Gateway Prefix");
+  if( c->redirect_gateway_prefix )
+    STRPRINT_IFSET(c->redirect_gateway_flags,"Redirect Gateway Flags");
   /* STRPRINT_IFSET(c->bindpw,"BindPW"); */
   /* TODO finish dumping info */
 }
