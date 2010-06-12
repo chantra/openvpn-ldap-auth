@@ -32,7 +32,8 @@ typedef struct config{
   int				ldap_version;
   char      *search_filter;
 
-  char      *default_gw_prefix;
+  char      *redirect_gateway_prefix;
+  char      *redirect_gateway_flags;
 
   char			*ssl;
   char			*tls_cacertfile;

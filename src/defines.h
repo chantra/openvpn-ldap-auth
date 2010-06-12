@@ -36,6 +36,7 @@
 //#define OTLS_CIPHERSUITE
 #define OTLS_REQCERT  "never"
 #define OTIMEOUT  15
+#define OREDIRECT_GATEWAY_FLAGS "def1 bypass-dhcp"
 
 #endif
  

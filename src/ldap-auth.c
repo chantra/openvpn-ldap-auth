@@ -266,7 +266,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   if( DODEBUG( context->verb ) )
       config_dump( context->config ); 
 
-  if( context->config->default_gw_prefix && strlen( context->config->default_gw_prefix ) > 0 ){
+  if( context->config->redirect_gateway_prefix && strlen( context->config->redirect_gateway_prefix ) > 0 ){
     *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2);
   }
   /* set up mutex/cond */
@@ -354,15 +354,15 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle, const int type, const ch
       LOGERROR("No username supplied to OpenVPN plugin");
       return OPENVPN_PLUGIN_FUNC_ERROR;
     }
-    if (!config->default_gw_prefix || strlen (config->default_gw_prefix) == 0)
+    if (!config->redirect_gateway_prefix || strlen (config->redirect_gateway_prefix) == 0)
       return OPENVPN_PLUGIN_FUNC_SUCCESS;
     /* do the username start with prefix? */
-    if( strncmp( config->default_gw_prefix, username, strlen( config->default_gw_prefix ) ) == 0 ){
+    if( strncmp( config->redirect_gateway_prefix, username, strlen( config->redirect_gateway_prefix ) ) == 0 ){
       *return_list = la_malloc( sizeof( struct openvpn_plugin_string_list ) );
       if( *return_list != NULL){
         (*return_list)->next = NULL;
         (*return_list)->name = strdup( "config" );
-        (*return_list)->value = strdup( "push \"redirect-gateway def1 bypass-dhcp\"");
+        (*return_list)->value = strdupf("push \"redirect-gateway %s\"", config->redirect_gateway_flags);
       }
     }
     return OPENVPN_PLUGIN_FUNC_SUCCESS;
@@ -380,11 +380,11 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle, const int type, const ch
       return res;
     }
     if( username ){
-      /* check if we have the default_gw_prefix set
+      /* check if we have the redirect_gateway_prefix set
           and if it matches user */
-      if( config->default_gw_prefix 
-          && strncmp( config->default_gw_prefix, username, strlen( config->default_gw_prefix ) ) == 0 ){
-        auth_context->username = strdup( username + strlen( config->default_gw_prefix ) );
+      if( config->redirect_gateway_prefix 
+          && strncmp( config->redirect_gateway_prefix, username, strlen( config->redirect_gateway_prefix ) ) == 0 ){
+        auth_context->username = strdup( username + strlen( config->redirect_gateway_prefix ) );
       }else{
         auth_context->username = strdup( username );
       }
