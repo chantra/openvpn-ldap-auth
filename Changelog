@@ -1,3 +1,6 @@
+version 0.0.4 2010-07-19
+	* Only one thread is handling authentication
+
 version 0.0.3 2010-05-11
 	* Authentication is now made in a separate thread
 		- Avoid to hang current connection while LDAP backend is slow
