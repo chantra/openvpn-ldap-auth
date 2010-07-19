@@ -28,6 +28,10 @@
 #include "debug.h"
 #include "la_ldap.h"
 
+#ifdef ENABLE_LDAPUSERCONF
+#include "ldap_profile.h"
+#endif
+
 void
 ldap_context_free( ldap_context_t *l ){
   if( !l ) return;
@@ -322,6 +326,10 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
         /* success, let set our return value to SUCCESS */
         if( DODEBUG( l->verb ) )
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
+        /* TODO check if user is allowed to connect */
+#ifdef ENABLE_LDAPUSERCONF
+      ldap_account_load( ldap, userdn, NULL );
+#endif
         /* check if user belong to right groups */
         if( config->groupdn && config->group_search_filter && config->member_attribute ){
             rc = ldap_group_membership( ldap, l, userdn );
