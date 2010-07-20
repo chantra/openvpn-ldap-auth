@@ -76,6 +76,16 @@ auth_context_new( void ){
 }
 
 /**
+ * la_ldap_set_timeout:
+ * Set a timeout according to config
+ */
+void
+la_ldap_set_timeout( config_t *conf, struct timeval *timeout){
+  timeout->tv_sec = conf->timeout;
+  timeout->tv_usec = 0;
+}
+
+/**
  * Search for a user's DN
  * Given a search_filter and context, will search for 
  */
@@ -98,8 +108,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
   config = ldap_context->config;
   
   /* initialise timeout values */
-  timeout.tv_sec = config->timeout;
-  timeout.tv_usec = 0;
+  la_ldap_set_timeout( config, &timeout );
   if( username && config->search_filter ){
     search_filter = str_replace(config->search_filter, "%u", username );
   }
@@ -125,9 +134,10 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
         LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
       }
     }
-    /* free the returned result */
-    ldap_msgfree( result );
   }
+  /* free the returned result */
+  ldap_msgfree( result );
+
   if( dn ){
     userdn = strdup( dn );
     /* finally, if a DN was returned, free it */
