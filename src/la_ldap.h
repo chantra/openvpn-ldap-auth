@@ -74,6 +74,10 @@ extern void ldap_context_free( ldap_context_t *l );
 extern ldap_context_t * ldap_context_new( void );
 
 /**
+ * Set a timeout according to config
+ */
+extern void la_ldap_set_timeout( config_t *conf, struct timeval *timeout);
+/**
  * handle authentication action
  */
 extern int la_ldap_handle_authentication( ldap_context_t *l, action_t *a);
