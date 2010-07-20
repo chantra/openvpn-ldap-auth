@@ -27,6 +27,9 @@
 #include "utils.h"
 #include "action.h"
 
+/* ldap forward declaration */
+typedef struct LDAP ldap;
+
 typedef struct ldap_context
 {
 
@@ -82,4 +85,8 @@ extern void la_ldap_set_timeout( config_t *conf, struct timeval *timeout);
  */
 extern int la_ldap_handle_authentication( ldap_context_t *l, action_t *a);
 
+/**
+ * return ldap's ld_errno value
+ */
+extern int la_ldap_errno( LDAP *ldap ); 
 #endif /* __LA_LDAP_H__ */

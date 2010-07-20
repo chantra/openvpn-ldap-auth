@@ -91,6 +91,16 @@ la_ldap_set_timeout( config_t *conf, struct timeval *timeout){
 }
 
 /**
+ * la_ldap_errno
+ */
+int
+la_ldap_errno( LDAP *ldap ){
+  int rc;
+  ldap_get_option(ldap, LDAP_OPT_ERROR_NUMBER, &rc);
+  return rc;
+}
+
+/**
  * Search for a user's DN
  * Given a search_filter and context, will search for 
  */
@@ -141,6 +151,8 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
         LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
       }
     }
+  }else{
+    LOGERROR( "ldap_search_ext_s did not succeed (%d) %s\n", rc, ldap_err2string( rc ));
   }
   /* free the returned result */
   if( result != NULL ) ldap_msgfree( result );
@@ -339,7 +351,10 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
         /* TODO check if user is allowed to connect */
 #ifdef ENABLE_LDAPUSERCONF
-        LOGWARNING( "ldap_account returned: %d\n", ldap_account_load( l, ldap, userdn, NULL ));        
+        ldap_account_t *account = ldap_account_new();
+        LOGWARNING( "ldap_account returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, account ));
+        ldap_account_dump( account );
+        ldap_account_free( account );
 #endif
         /* check if user belong to right groups */
         if( config->groupdn && config->group_search_filter && config->member_attribute ){

@@ -26,6 +26,8 @@
 #include "list.h"
 #include "utils.h"
 #include "action.h"
+#include "la_ldap.h"
+
 
 typedef struct ldap LDAP;
 
@@ -44,6 +46,7 @@ typedef struct ldap_profile
 typedef struct ldap_account
 {
   struct ldap_profile   *profile;
+  char                  *profile_dn;
   char                  *ifconfig_push;
 } ldap_account_t;
 
@@ -58,6 +61,11 @@ extern ldap_profile_t *ldap_profile_new( void );
 extern void ldap_profile_free( ldap_profile_t *l );
 
 /**
+ * Print LDAP profile config to stdout
+ */
+extern void ldap_profile_dump( ldap_profile_t *l );
+
+/**
  * Allocate LDAP account resouces
  */
 extern ldap_account_t *ldap_account_new( void );
@@ -68,9 +76,14 @@ extern ldap_account_t *ldap_account_new( void );
 extern void ldap_account_free( ldap_account_t *l );
 
 /**
+ * Print LDAP account config to stdout
+ */
+extern void ldap_account_dump( ldap_account_t *l );
+/**
  * Load user settings from LDAP
+ * returns 0 on success, non 0 otherwise
  */
 
-extern int ldap_account_load( LDAP *ldap, char *userdn, ldap_account_t *account );
+extern int ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, ldap_account_t *account );
  
 #endif /* __LDAP_PROFILE_H__ */
