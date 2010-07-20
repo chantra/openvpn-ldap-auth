@@ -105,6 +105,8 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
     LOGERROR("ldap_find_user missing required parameter\n");
     return NULL;
   }
+
+  result = NULL;
   config = ldap_context->config;
   
   /* initialise timeout values */
@@ -136,7 +138,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
     }
   }
   /* free the returned result */
-  ldap_msgfree( result );
+  if( result != NULL ) ldap_msgfree( result );
 
   if( dn ){
     userdn = strdup( dn );
@@ -173,8 +175,7 @@ connect_ldap( ldap_context_t *l ){
     goto connect_ldap_error;
   }
   /* Timeout */
-  timeout.tv_sec = config->timeout;
-  timeout.tv_usec = 0;
+  la_ldap_set_timeout( config, &timeout);
   rc = ldap_set_option(ldap, LDAP_OPT_NETWORK_TIMEOUT, &timeout );
   if( rc != LDAP_OPT_SUCCESS ){
     LOGERROR( "ldap_set_option timeout %ds returned (%d) \"%s\"\n", config->timeout, rc, ldap_err2string(rc) );
@@ -251,8 +252,7 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   config = ldap_context->config;
   
   /* initialise timeout values */
-  timeout.tv_sec = config->timeout;
-  timeout.tv_usec = 0;
+  la_ldap_set_timeout( config, &timeout);
   if( userdn && config->group_search_filter && config->member_attribute ){
     search_filter = strdupf(filter,config->member_attribute, userdn, config->group_search_filter);
   }
@@ -270,9 +270,9 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
         LOGINFO( "User %s matches %d groups with filter %s\n", userdn, nbrow, search_filter );
       res = 0;
     }
-    /* free the returned result */
-    ldap_msgfree( result );
   }
+  /* free the returned result */
+  if ( result != NULL ) ldap_msgfree( result );
   if( search_filter ) free( search_filter );
   return res;
 }
