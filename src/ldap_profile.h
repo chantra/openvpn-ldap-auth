@@ -48,7 +48,7 @@ typedef struct ldap_account
   char                  *ifconfig_push;
 } ldap_account_t;
 
-/** 
+/**
  * Allocate LDAP profile resources
  */
 extern ldap_profile_t *ldap_profile_new( void );
@@ -83,7 +83,7 @@ extern void ldap_account_dump( ldap_account_t *l );
  */
 
 extern int ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, ldap_account_t *account );
- 
+
 /**
  * Returns a string that is suitable to pass options to openvpn
  */

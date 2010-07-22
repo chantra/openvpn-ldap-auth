@@ -66,7 +66,7 @@ ldap_profile_dump( ldap_profile_t *l ){
 \tend_date:\t\t%u\n\
 \tpf_rules:\t\t%s\n\
 \tpush_reset:\t\t%s\n\
-\tconfig:\t\t%s\n", 
+\tconfig:\t\t%s\n",
     (unsigned int)l->start_date, (unsigned int)l->end_date,
     l->pf_rules ? l->pf_rules : "None",
     l->push_reset ? "TRUE" : "FALSE",
@@ -129,7 +129,7 @@ int
 la_generalizedtime_to_time(const char *s, time_t *t)
 {
   struct tm tm;
-  
+
   if (s == NULL) return 0;
 
   if( strncasecmp( s, "00000000000000", sizeof("00000000000000") -1 ) == 0
@@ -139,14 +139,14 @@ la_generalizedtime_to_time(const char *s, time_t *t)
     return 0;
   }
   memset(&tm, 0, sizeof(tm));
-  if (sscanf(s, "%04u%02u%02u%02u%02u%02u", 
-       &tm.tm_year, &tm.tm_mon, &tm.tm_mday, 
+  if (sscanf(s, "%04u%02u%02u%02u%02u%02u",
+       &tm.tm_year, &tm.tm_mon, &tm.tm_mday,
        &tm.tm_hour, &tm.tm_min, &tm.tm_sec) != 6) {
     return 1;
   }
   tm.tm_year -= 1900;
   tm.tm_mon -= 1;
-  
+
   *t = timegm(&tm);
   return 0;
 }
@@ -210,7 +210,7 @@ ldap_account_load_from_entry_end_loop:
    * on error or end of attribute list
    * we need to check out la_ldap_errno value to know
    * if we exited the loop on error or success
-   */ 
+   */
   int ec;
   ec = la_ldap_errno( ldap );
   if( ec != LDAP_SUCCESS){
@@ -254,19 +254,19 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, l
                       attrs, 0,NULL, NULL,
                       &timeout, 2, &result );
   if( rc != LDAP_SUCCESS ){
-    LOGERROR( "ldap_search_ext_s: did not succeed for dn %s, (%d): %s\n", 
-                dn, rc, ldap_err2string( rc ) ); 
+    LOGERROR( "ldap_search_ext_s: did not succeed for dn %s, (%d): %s\n",
+                dn, rc, ldap_err2string( rc ) );
     ldap_msgfree( result );
     return 1;
   }
-  int nbrow = ldap_count_entries( ldap, result ); 
+  int nbrow = ldap_count_entries( ldap, result );
   if( nbrow != 1 ){
     LOGERROR( "ldap_search_ext_s: returned %d results, only 1 expected\n", nbrow );
     ldap_msgfree( result );
     return 1;
   }
 
-  /** for a user account, we first check if there is a 
+  /** for a user account, we first check if there is a
    * profile we should read data from.
    * Then, we read profile data
    */
@@ -332,12 +332,12 @@ ldap_account_get_options_to_string( ldap_account_t *account ){
   tot_size += 1;
   res = la_malloc( tot_size );
   la_memset( res, 0, tot_size);
- 
+
   if (account->profile->push_reset)
     strcat( res, "push-reset\n");
   if (account->ifconfig_push)
     strcatf( res, "ifconfig %s\n", account->ifconfig_push );
-  
+
   if ( list_length (account->profile->iroutes) > 0 )
     for(elem = list_first( account->profile->iroutes ); elem; elem = list_item_next( elem ) ){
       strcatf( res, "iroute %s\n", (char *)elem->data );

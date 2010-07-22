@@ -543,7 +543,7 @@ action_thread_main_loop (void *c)
 OPENVPN_EXPORT void *
 openvpn_plugin_client_constructor_v1( openvpn_plugin_handle_t handle){
   client_context_t *cc = client_context_new( );
-  return (void *)cc;  
+  return (void *)cc;
 }
 
 OPENVPN_EXPORT void

@@ -89,5 +89,5 @@ extern int la_ldap_handle_authentication( ldap_context_t *l, action_t *a);
 /**
  * return ldap's ld_errno value
  */
-extern int la_ldap_errno( LDAP *ldap ); 
+extern int la_ldap_errno( LDAP *ldap );
 #endif /* __LA_LDAP_H__ */

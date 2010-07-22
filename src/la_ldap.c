@@ -96,7 +96,7 @@ auth_context_free( auth_context_t *a ){
   if( a->username ) free( a->username );
   if( a->password ) free( a->password );
   if( a->auth_control_file ) free( a->auth_control_file );
-  FREE_IF_NOT_NULL( a->pf_file ); 
+  FREE_IF_NOT_NULL( a->pf_file );
   free( a );
   return;
 }
@@ -388,7 +388,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
         /* TODO check if user timeframe is allowed start_date, end_date */
         /* write to pf_file */
         if( client_context->ldap_account->profile->pf_rules && auth_context->pf_file ){
-          write_to_pf_file( auth_context->pf_file, client_context->ldap_account->profile->pf_rules ); 
+          write_to_pf_file( auth_context->pf_file, client_context->ldap_account->profile->pf_rules );
         }else{
           /* set up default pf_rules */
         }
