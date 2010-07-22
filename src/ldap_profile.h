@@ -29,8 +29,6 @@
 #include "la_ldap.h"
 
 
-typedef struct ldap LDAP;
-
 typedef struct ldap_profile
 {
   time_t               start_date;
@@ -86,4 +84,9 @@ extern void ldap_account_dump( ldap_account_t *l );
 
 extern int ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, ldap_account_t *account );
  
+/**
+ * Returns a string that is suitable to pass options to openvpn
+ */
+
+extern char *ldap_account_get_options_to_string( ldap_account_t *account );
 #endif /* __LDAP_PROFILE_H__ */

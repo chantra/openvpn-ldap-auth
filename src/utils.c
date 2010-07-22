@@ -43,18 +43,18 @@ la_memset( void *s, int c, size_t n ){
   return memset( s, c, n );
 }
 
+/**
+ * same as stdup but given a va_list
+ */
 char *
-strdupf (const char *fmt, ...){
-  va_list  vargs;
+vstrdupf (const char *fmt, va_list vargs){
   char     buf[BUFSIZ];
   char    *p;
 
   if (!fmt) {
     return (NULL);
   }
-  va_start (vargs, fmt);
   vsnprintf (buf, sizeof (buf), fmt, vargs);
-  va_end (vargs);
 
   buf[sizeof (buf) - 1] = '\0';        /* ensure buf is NUL-terminated */
 
@@ -62,6 +62,40 @@ strdupf (const char *fmt, ...){
     return (NULL);
   }
   return (p);
+}
+
+
+char *
+strdupf (const char *fmt, ...){
+  va_list  vargs;
+  char    *p;
+
+  if (!fmt) {
+    return (NULL);
+  }
+  va_start (vargs, fmt);
+  p = vstrdupf (fmt, vargs);
+  va_end (vargs);
+
+  return p;
+}
+
+char *
+strcatf( char *dest, const char *fmt, ...){
+  va_list  vargs;
+  char    *p;
+  if (!fmt) {
+    return dest;
+  }
+  va_start (vargs, fmt);
+  p = vstrdupf( fmt, vargs );
+  va_end (vargs);
+
+  if(p){
+    strcat( dest, p );
+    la_free( p );
+  }
+  return dest;
 }
 
 char *

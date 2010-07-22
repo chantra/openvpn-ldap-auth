@@ -299,3 +299,54 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, l
   ldap_msgfree( result );
   return 0;
 }
+
+/**
+ * ldap_account_get_options_to_string
+ * returns NULL is no option is to be pushed
+ */
+
+char *
+ldap_account_get_options_to_string( ldap_account_t *account ){
+
+  uint8_t tot_size = 0;
+  list_item_t *elem = NULL;
+  char *res = NULL;
+  if (account->profile->push_reset)
+      tot_size += sizeof("push-reset\n");
+  if (account->ifconfig_push)
+      tot_size += sizeof("ifconfig \n") + strlen(account->ifconfig_push);
+
+  if ( list_length (account->profile->iroutes) > 0 )
+    for(elem = list_first( account->profile->iroutes ); elem; elem = list_item_next( elem ) ){
+      tot_size += sizeof("iroute \n") + strlen( (char *)elem->data );
+    }
+
+  if ( list_length (account->profile->push_options) > 0 )
+    for(elem = list_first( account->profile->push_options ); elem; elem = list_item_next( elem ) ){
+      tot_size += sizeof("push \"\"\n") + strlen( (char *)elem->data );
+    }
+
+  if ( tot_size == 0 )
+    return NULL;
+
+  tot_size += 1;
+  res = la_malloc( tot_size );
+  la_memset( res, 0, tot_size);
+ 
+  if (account->profile->push_reset)
+    strcat( res, "push-reset\n");
+  if (account->ifconfig_push)
+    strcatf( res, "ifconfig %s\n", account->ifconfig_push );
+  
+  if ( list_length (account->profile->iroutes) > 0 )
+    for(elem = list_first( account->profile->iroutes ); elem; elem = list_item_next( elem ) ){
+      strcatf( res, "iroute %s\n", (char *)elem->data );
+    }
+
+  if ( list_length (account->profile->push_options) > 0 )
+    for(elem = list_first( account->profile->push_options ); elem; elem = list_item_next( elem ) ){
+      strcatf( res, "push \"%s\"\n", (char *)elem->data );
+    }
+
+  return res;
+}

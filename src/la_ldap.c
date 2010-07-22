@@ -27,11 +27,40 @@
 
 #include "debug.h"
 #include "la_ldap.h"
+#include "client_context.h"
 #include "config.h"
 
 #ifdef ENABLE_LDAPUSERCONF
 #include "ldap_profile.h"
 #endif
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+/* write a value to auth_control_file */
+int
+write_to_pf_file( char *pf_file, char *value )
+{
+  int fd, rc;
+  fd = open( pf_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU );
+  if( fd == -1 ){
+    LOGERROR( "Could not open file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+    return -1;
+  }
+  rc = write( fd, value, strlen(value) );
+  if( rc == -1 ){
+    LOGERROR( "Could not write value %s to  file %s: (%d) %s\n", value, pf_file, errno, strerror( errno ) );
+  }else if( rc !=1 ){
+    LOGERROR( "Could not write value %s to file %s\n", value, pf_file );
+  }
+  rc = close( fd );
+  if( rc != 0 ){
+    LOGERROR( "Could not close file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+  }
+  return rc == 0;
+}
+
 
 void
 ldap_context_free( ldap_context_t *l ){
@@ -67,6 +96,7 @@ auth_context_free( auth_context_t *a ){
   if( a->username ) free( a->username );
   if( a->password ) free( a->password );
   if( a->auth_control_file ) free( a->auth_control_file );
+  FREE_IF_NOT_NULL( a->pf_file ); 
   free( a );
   return;
 }
@@ -99,6 +129,8 @@ la_ldap_errno( LDAP *ldap ){
   ldap_get_option(ldap, LDAP_OPT_ERROR_NUMBER, &rc);
   return rc;
 }
+
+
 
 /**
  * Search for a user's DN
@@ -300,6 +332,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
   LDAP *ldap = NULL;
   config_t *config = l->config;
   auth_context_t *auth_context = a->context;
+  client_context_t *client_context = a->client_context;
   char *userdn = NULL;
   int rc;
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
@@ -351,10 +384,15 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
         /* TODO check if user is allowed to connect */
 #ifdef ENABLE_LDAPUSERCONF
-        ldap_account_t *account = ldap_account_new();
-        LOGWARNING( "ldap_account returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, account ));
-        ldap_account_dump( account );
-        ldap_account_free( account );
+        LOGWARNING( "ldap_account returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account ));
+        /* TODO check if user timeframe is allowed start_date, end_date */
+        /* write to pf_file */
+        if( client_context->ldap_account->profile->pf_rules && auth_context->pf_file ){
+          write_to_pf_file( auth_context->pf_file, client_context->ldap_account->profile->pf_rules ); 
+        }else{
+          /* set up default pf_rules */
+        }
+        /* ldap_account_dump( client_context->ldap_account ); */
 #endif
         /* check if user belong to right groups */
         if( config->groupdn && config->group_search_filter && config->member_attribute ){

@@ -28,7 +28,7 @@
 #include "action.h"
 
 /* ldap forward declaration */
-typedef struct LDAP ldap;
+typedef struct ldap LDAP;
 
 typedef struct ldap_context
 {
@@ -53,6 +53,7 @@ typedef struct auth_context
   char            *username;
   char            *password;
   char            *auth_control_file;
+  char            *pf_file;
 } auth_context_t;
 
 /** 
