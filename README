@@ -30,7 +30,10 @@ Configuration:
 
 Grab the example configuration file: tests/config.conf
 
+%u will be replaced by username
+
 uri=ldap://192.168.9.135
+search_filter=(uid=%u)
 basedn=ou=users,dc=example,dc=com
 binddn=cn=admin,dc=example,dc=com
 bindpw=secret
@@ -40,6 +43,13 @@ ssl=off
 groupdn=ou=roles,dc=example,dc=com
 group_search_filter=|(cn=vpn)(cn=sysadmins)
 member_attribute=member
+
+Default values are:
+uri=ldap://localhost
+basedn=ou=users,dc=example,dc=com
+search_filter=(uid=%u)
+ssl=off
+
 
 In your openvpn config add:
 plugin /etc/openvpn/ldap-auth/libopenvpn-ldap-auth.so -c /etc/openvpn/ldap-auth/ldap-auth.conf
