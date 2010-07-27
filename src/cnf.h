@@ -22,17 +22,29 @@
 #ifndef _CNF_H_
 #define _CNF_H_
 
-typedef struct config{
+#include "list.h"
+
+
+typedef enum ldap_search_scope{
+  LA_SCOPE_BASE = 0,
+  LA_SCOPE_ONELEVEL,
+  LA_SCOPE_SUBTREE
+} ldap_search_scope_t;
+/**
+ * ldap_config
+ * defines how to connect to an ldap server
+ */
+
+typedef struct ldap_config{
   char			*uri;
 
   char			*binddn;
   char			*bindpw;
 
-  char			*basedn;
   int				ldap_version;
+  int       timeout;
 
-  char      *search_filter;
-
+  /* TLS/SSL */
   char			*ssl;
   char			*tls_cacertfile;
   char			*tls_cacertdir;
@@ -41,11 +53,28 @@ typedef struct config{
   char			*tls_ciphersuite;
   char			*tls_reqcert;
 
-  int       timeout;
+
+} ldap_config_t;
+
+typedef struct profile_config{
+  char        *basedn;
+  char        *search_filter;
+  ldap_search_scope_t search_scope;
   /* group membership */
-  char      *groupdn;
-  char      *group_search_filter;
-  char      *member_attribute;
+  char        *groupdn;
+  char        *group_search_filter;
+  char        *member_attribute;
+  char        *profiledn;
+} profile_config_t;
+
+/**
+ * config hold a reference to global_config
+ * and the different profiles to use
+ */
+typedef struct config{
+  ldap_config_t    *ldap;
+  profile_config_t  *profile;
+  list_t    *profiles;
 } config_t;
 
 extern int config_parse_file( const char *filename, config_t *c );

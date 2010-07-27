@@ -163,11 +163,14 @@ ldap_account_load_from_entry( LDAP *ldap, LDAPMessage *e, ldap_account_t *accoun
   int rc = 0;
   int i = 0;
   time_t t;
+  int ec;
 
   for( attr = ldap_first_attribute( ldap, e, &berptr ); attr != NULL; attr = ldap_next_attribute( ldap, e, berptr ) ){
     vals = ldap_get_values_len( ldap, e, attr );
+    printf("attribute: %s: %d\n", attr, ldap_count_values_len( vals ));
     if( ldap_count_values_len( vals ) < 1 )
       goto ldap_account_load_from_entry_end_loop;
+
     if( strcasecmp( attr, "OvpnStartDate" ) == 0 && ldap_count_values_len( vals ) > 0){
       if( la_generalizedtime_to_time( vals[0]->bv_val, &t ) ){
         LOGERROR("Generalized time is not valid for OvpnStartDate");
@@ -211,7 +214,6 @@ ldap_account_load_from_entry_end_loop:
    * we need to check out la_ldap_errno value to know
    * if we exited the loop on error or success
    */
-  int ec;
   ec = la_ldap_errno( ldap );
   if( ec != LDAP_SUCCESS){
     rc = 1;
@@ -287,13 +289,25 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, l
   }
   ldap_value_free_len( vals );
   if( is_account ){
-    vals = ldap_get_values_len( ldap, e, "ovpnprofile" );
-    if ( ldap_count_values_len( vals ) > 0 ){
-      /** We have a profile, read profile values from DN */
-      account->profile_dn = strdup( vals[0]->bv_val );
-      ldap_account_load_from_dn( ldap_context, ldap, vals[0]->bv_val, account );
+    if( account->profile_dn ){
+      la_free( account->profile_dn );
+      account->profile_dn = NULL;
     }
-    ldap_value_free_len( vals );
+    if( ( vals = ldap_get_values_len( ldap, e, "ovpnprofile" ) ) ){
+      if ( ldap_count_values_len( vals ) > 0 ){
+        /** We have a profile, read profile values from DN */
+        account->profile_dn = strdup( vals[0]->bv_val );
+      }
+      ldap_value_free_len( vals );
+
+      if( account->profile_dn ){
+        ldap_account_load_from_dn( ldap_context, ldap, account->profile_dn, account );
+      }
+    }else{
+      /* reset ld_errno */
+      int ec = LDAP_SUCCESS;
+      ldap_set_option( ldap, LDAP_OPT_ERROR_NUMBER, &ec );
+    }
   }
   ldap_account_load_from_entry( ldap, e, account );
   ldap_msgfree( result );

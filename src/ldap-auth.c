@@ -227,29 +227,29 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
    while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:b:f:t:WZ" ) ) != - 1 ){
     switch( rc ) {
       case 'H':
-        context->config->uri = strdup(optarg);
+        context->config->ldap->uri = strdup(optarg);
         break;
       case 'b':
-        context->config->basedn = strdup(optarg);
+        context->config->profile->basedn = strdup(optarg);
         break;
       case 'f':
-        context->config->search_filter = strdup(optarg);
+        context->config->profile->search_filter = strdup(optarg);
         break;
       case 'Z':
-        context->config->ssl = strdup("start_tls");
+        context->config->ldap->ssl = strdup("start_tls");
         break;
       case 'D':
-        context->config->binddn = strdup(optarg);
+        context->config->ldap->binddn = strdup(optarg);
         break;
       case 'W':
-        context->config->bindpw = get_passwd("BindPW Password: ");
+        context->config->ldap->bindpw = get_passwd("BindPW Password: ");
         //printdebug( "Password is %s: length: %d\n", config->bindpw, strlen(config->bindpw) );
         break;
       case 'c':
         configfile = optarg;
         break;
       case 't':
-        context->config->timeout = atoi( optarg );
+        context->config->ldap->timeout = atoi( optarg );
         break;
       case '?':
         fprintf( stderr, "LDAP-AUTH: Unknown Option -%c !!\n", optopt );

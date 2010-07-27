@@ -47,6 +47,7 @@ client_context_free (struct client_context *cc) {
 	if (cc == NULL)
 		return;
 	FREE_IF_NOT_NULL (cc->user_id);
+	FREE_IF_NOT_NULL (cc->user_dn);
 #ifdef ENABLE_LDAPUSERCONF
   if( cc->ldap_account != NULL ) ldap_account_free( cc->ldap_account );
 #endif

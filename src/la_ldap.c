@@ -38,11 +38,16 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-/* write a value to auth_control_file */
+/* write a value to pf_file */
 int
 write_to_pf_file( char *pf_file, char *value )
 {
   int fd, rc;
+  if( pf_file == NULL ){
+    LOGERROR( "pf_file is null\n");
+    return -1;
+  }
+
   fd = open( pf_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU );
   if( fd == -1 ){
     LOGERROR( "Could not open file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
@@ -51,8 +56,8 @@ write_to_pf_file( char *pf_file, char *value )
   rc = write( fd, value, strlen(value) );
   if( rc == -1 ){
     LOGERROR( "Could not write value %s to  file %s: (%d) %s\n", value, pf_file, errno, strerror( errno ) );
-  }else if( rc !=1 ){
-    LOGERROR( "Could not write value %s to file %s\n", value, pf_file );
+  }else if( rc !=strlen(value) ){
+    LOGERROR( "Could not write all of  %s to file %s\n", value, pf_file );
   }
   rc = close( fd );
   if( rc != 0 ){
@@ -116,7 +121,7 @@ auth_context_new( void ){
  */
 void
 la_ldap_set_timeout( config_t *conf, struct timeval *timeout){
-  timeout->tv_sec = conf->timeout;
+  timeout->tv_sec = conf->ldap->timeout;
   timeout->tv_usec = 0;
 }
 
@@ -131,40 +136,37 @@ la_ldap_errno( LDAP *ldap ){
 }
 
 
-
-/**
- * Search for a user's DN
- * Given a search_filter and context, will search for 
- */
 char *
-ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username ){
+ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char *username, profile_config_t *p){
+  char *userdn = NULL;
   struct timeval timeout;
   char *attrs[] = { NULL };
   char          *dn = NULL;
   LDAPMessage *e, *result;
   config_t *config = NULL;
-  char *search_filter = NULL;
   int rc;
-  char *userdn = NULL;
+  char *search_filter = NULL;
+  int ldap_scope = 0;
 
-  /* arguments sanity check */
-  if( !ldap_context || !username || !ldap){
-    LOGERROR("ldap_find_user missing required parameter\n");
-    return NULL;
-  }
 
   result = NULL;
   config = ldap_context->config;
-  
+
   /* initialise timeout values */
   la_ldap_set_timeout( config, &timeout );
-  if( username && config->search_filter ){
-    search_filter = str_replace(config->search_filter, "%u", username );
+
+  if( username && config->profile->search_filter ){
+    search_filter = str_replace(config->profile->search_filter, "%u", username );
   }
   if( DODEBUG( ldap_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->basedn );
-
-  rc = ldap_search_ext_s( ldap, config->basedn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
+    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, p->basedn );
+  if( p->search_scope == LA_SCOPE_BASE )
+    ldap_scope = LDAP_SCOPE_BASE;
+  else if( p->search_scope == LA_SCOPE_ONELEVEL )
+    ldap_scope = LDAP_SCOPE_ONELEVEL;
+  else if( p->search_scope == LA_SCOPE_SUBTREE )
+    ldap_scope = LDAP_SCOPE_SUBTREE;
+  rc = ldap_search_ext_s( ldap, p->basedn, ldap_scope, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
   if( rc == LDAP_SUCCESS ){
     /* Check how many entries were found. Only one should be returned */
     int nbrow = ldap_count_entries( ldap, result );
@@ -196,6 +198,49 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
   }
   if( search_filter ) free( search_filter );
   return userdn;
+
+}
+/**
+ * Search for a user's DN
+ * Given a search_filter and context, will search for
+ */
+char *
+ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, client_context_t *cc ){
+  config_t *config = NULL;
+  char *userdn = NULL;
+  profile_config_t *p = NULL;
+  list_item_t *item = NULL;
+
+  cc->profile = NULL;
+
+  /* arguments sanity check */
+  if( !ldap_context || !username || !ldap){
+    LOGERROR("ldap_find_user missing required parameter\n");
+    return NULL;
+  }
+
+  config = ldap_context->config;
+
+  if( list_length( config->profiles ) == 0 ){
+    p = config->profile;
+    userdn = ldap_find_user_for_profile( ldap, ldap_context, username, p );
+    if( userdn ){
+      cc->user_dn = strdup( userdn );
+      cc->profile = p;
+    }
+  }else{
+    for( item = list_first( config->profiles ); item; item = item->next ){
+      p = item->data;
+      userdn = ldap_find_user_for_profile( ldap, ldap_context, username, p );
+      if( userdn ){
+        cc->user_dn = strdup( userdn );
+        cc->profile = p;
+        break;
+      }
+    }
+  }
+
+  return userdn;
 }
 
 
@@ -212,26 +257,26 @@ connect_ldap( ldap_context_t *l ){
   struct timeval timeout;
 
   /* init connection to ldap */
-  rc = ldap_initialize(&ldap, config->uri);
+  rc = ldap_initialize(&ldap, config->ldap->uri);
   if( rc!= LDAP_SUCCESS ){
     LOGERROR( "ldap_initialize returned (%d) \"%s\" : %s\n", rc, ldap_err2string(rc), strerror(errno) );
     goto connect_ldap_error;
   }
   /* Version */
-  rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap_version));
+  rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap->ldap_version));
   if( rc != LDAP_OPT_SUCCESS ){
-    LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"\n", config->ldap_version, rc, ldap_err2string(rc) );
+    LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"\n", config->ldap->ldap_version, rc, ldap_err2string(rc) );
     goto connect_ldap_error;
   }
   /* Timeout */
   la_ldap_set_timeout( config, &timeout);
   rc = ldap_set_option(ldap, LDAP_OPT_NETWORK_TIMEOUT, &timeout );
   if( rc != LDAP_OPT_SUCCESS ){
-    LOGERROR( "ldap_set_option timeout %ds returned (%d) \"%s\"\n", config->timeout, rc, ldap_err2string(rc) );
+    LOGERROR( "ldap_set_option timeout %ds returned (%d) \"%s\"\n", config->ldap->timeout, rc, ldap_err2string(rc) );
     goto connect_ldap_error;
   }
   /* SSL/TLS */
-  if( strcmp( config->ssl, "start_tls" ) == 0){
+  if( strcmp( config->ldap->ssl, "start_tls" ) == 0){
     /*TODO handle certif properly */
     ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
     rc = ldap_set_option(ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, &ldap_tls_require_cert );
@@ -302,13 +347,13 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   
   /* initialise timeout values */
   la_ldap_set_timeout( config, &timeout);
-  if( userdn && config->group_search_filter && config->member_attribute ){
-    search_filter = strdupf(filter,config->member_attribute, userdn, config->group_search_filter);
+  if( userdn && config->profile->group_search_filter && config->profile->member_attribute ){
+    search_filter = strdupf(filter,config->profile->member_attribute, userdn, config->profile->group_search_filter);
   }
   if( DODEBUG( ldap_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->groupdn );
+    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->profile->groupdn );
 
-  rc = ldap_search_ext_s( ldap, config->groupdn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
+  rc = ldap_search_ext_s( ldap, config->profile->groupdn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
   if( rc == LDAP_SUCCESS ){
     /* Check how many entries were found. Only one should be returned */
     int nbrow = ldap_count_entries( ldap, result );
@@ -340,15 +385,15 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
   /* Connection to LDAP backend */
   ldap = connect_ldap( l );
   if( ldap == NULL ){
-    LOGERROR( "Could not connect to URI %s\n", config->uri );
+    LOGERROR( "Could not connect to URI %s\n", config->ldap->uri );
     goto la_ldap_handle_authentication_exit;        
   }
   /* bind to LDAP server anonymous or authenticated */
-  rc = ldap_binddn( ldap, config->binddn, config->bindpw );
+  rc = ldap_binddn( ldap, config->ldap->binddn, config->ldap->bindpw );
   switch( rc ){
     case LDAP_SUCCESS:
       if( DODEBUG( l->verb ) )
-        LOGINFO( "ldap_sasl_bind_s %s success\n", config->binddn ? config->binddn : "Anonymous" );
+        LOGINFO( "ldap_sasl_bind_s %s success\n", config->ldap->binddn ? config->ldap->binddn : "Anonymous" );
         break;
     case LDAP_INVALID_CREDENTIALS:
       LOGERROR( "ldap_binddn: Invalid Credentials\n" );
@@ -358,13 +403,12 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
       goto la_ldap_handle_authentication_free;
   }
 
-  userdn = ldap_find_user( ldap, l, auth_context->username );
+  userdn = ldap_find_user( ldap, l, auth_context->username, client_context );
   if( !userdn ){
     LOGWARNING( "LDAP user *%s* was not found \n", auth_context->username );
     goto la_ldap_handle_authentication_free;
   }
   
-  /* OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY */
   if (auth_context && l->config ){
       if (auth_context->username && strlen (auth_context->username) > 0 && auth_context->password){
       /** TODO authenticate user */
@@ -382,7 +426,6 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
         /* success, let set our return value to SUCCESS */
         if( DODEBUG( l->verb ) )
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
-        /* TODO check if user is allowed to connect */
 #ifdef ENABLE_LDAPUSERCONF
         LOGWARNING( "ldap_account returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account ));
         /* TODO check if user timeframe is allowed start_date, end_date */
@@ -391,11 +434,12 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
           write_to_pf_file( auth_context->pf_file, client_context->ldap_account->profile->pf_rules );
         }else{
           /* set up default pf_rules */
+          write_to_pf_file( auth_context->pf_file, "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n");
         }
         /* ldap_account_dump( client_context->ldap_account ); */
 #endif
         /* check if user belong to right groups */
-        if( config->groupdn && config->group_search_filter && config->member_attribute ){
+        if( config->profile->groupdn && config->profile->group_search_filter && config->profile->member_attribute ){
             rc = ldap_group_membership( ldap, l, userdn );
             if( rc == 0 ){
               res = OPENVPN_PLUGIN_FUNC_SUCCESS;

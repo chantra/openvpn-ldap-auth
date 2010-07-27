@@ -24,10 +24,13 @@
 #define _CLIENT_CONTEXT_H_
 
 #include "config.h"
+#include "cnf.h"
 
 
 typedef struct client_context {
   char  *user_id;
+  char  *user_dn;
+  profile_config_t *profile;
 #ifdef ENABLE_LDAPUSERCONF
   struct ldap_account *ldap_account;
 #endif
