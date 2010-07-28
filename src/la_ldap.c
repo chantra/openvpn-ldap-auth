@@ -32,44 +32,7 @@
 
 #ifdef ENABLE_LDAPUSERCONF
 #include "ldap_profile.h"
-#include "time.h"
 #endif
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#define PF_ALLOW_ALL "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n"
-
-/* write a value to pf_file */
-int
-write_to_pf_file( char *pf_file, char *value )
-{
-  int fd, rc;
-  if( pf_file == NULL ){
-    LOGERROR( "pf_file is null\n");
-    return -1;
-  }
-
-  fd = open( pf_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU );
-  if( fd == -1 ){
-    LOGERROR( "Could not open file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
-    return -1;
-  }
-  rc = write( fd, value, strlen(value) );
-  if( rc == -1 ){
-    LOGERROR( "Could not write value %s to  file %s: (%d) %s\n", value, pf_file, errno, strerror( errno ) );
-  }else if( rc !=strlen(value) ){
-    LOGERROR( "Could not write all of  %s to file %s\n", value, pf_file );
-  }
-  rc = close( fd );
-  if( rc != 0 ){
-    LOGERROR( "Could not close file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
-  }
-  return rc == 0;
-}
-
 
 void
 ldap_context_free( ldap_context_t *l ){
@@ -375,40 +338,6 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   return res;
 }
 
-/**
- * la_ldap_handle_pf_file
- * Given the plugin config and the client_context
- * will write to pf_file the right
- */
-int la_ldap_handle_pf_file(config_t *c, client_context_t *cc, char *pf_file){
-  profile_config_t *p = cc->profile;
-  ldap_profile_t *lp = cc->ldap_account->profile;
-
-  /* check if pf is enabled */
-  LOGDEBUG("Global:%s\tProfile:%s\tPF enable for this profile: %s\n",
-        ternary_to_string(c->profile->enable_pf),
-        ternary_to_string(p->enable_pf),
-        config_is_pf_enabled_for_profile( c, p) ? "TRUE" : "FALSE" );
-  /* write to pf_file */
-  if( pf_file == NULL && config_is_pf_enabled(c) ){
-    LOGERROR("PF is enabled but environment pf_file variable is NULL.\n");
-  }else if( pf_file ){
-    if( config_is_pf_enabled_for_profile( c, p) ){ 
-      if( lp->pf_rules ){
-        write_to_pf_file( pf_file, lp->pf_rules );
-      }else{
-        /* set up default pf_rules */
-        /* TODO, set default pf rules per profiles */
-        write_to_pf_file( pf_file, PF_ALLOW_ALL);
-      }
-    }else{
-        /* profile has PF disabled */
-        write_to_pf_file( pf_file, PF_ALLOW_ALL );
-    }
-  }
-  return 0;
-}
-
 int
 la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
   LDAP *ldap = NULL;
@@ -464,19 +393,13 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
         if( DODEBUG( l->verb ) )
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
 #ifdef ENABLE_LDAPUSERCONF
-        time_t now = time(NULL);
-        LOGWARNING( "ldap_account_load_from_dn returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account ));
+        ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account );
         /* check if user timeframe is allowed start_date, end_date */
-        if( ( client_context->ldap_account->profile->start_date == 0 || client_context->ldap_account->profile->start_date < now )
-            &&
-            ( client_context->ldap_account->profile->end_date == 0 || client_context->ldap_account->profile->end_date > now ) ){
-          LOGINFO("user time period: %d/%d is allowed to connect at %d\n", client_context->ldap_account->profile->start_date, client_context->ldap_account->profile->end_date, now);
-        }else{
-          LOGINFO("user time period: %d/%d is not allowed to connect at %d\n", client_context->ldap_account->profile->start_date, client_context->ldap_account->profile->end_date, now);
+        if( ldap_profile_handle_allowed_timeframe( client_context->ldap_account->profile ) != 0 ){
           res = OPENVPN_PLUGIN_FUNC_ERROR;
           goto la_ldap_handle_authentication_free;
         }
-        la_ldap_handle_pf_file( config, client_context, auth_context->pf_file );
+        ldap_profile_handle_pf_file( config, client_context->profile, client_context->ldap_account->profile, auth_context->pf_file );
         /* ldap_account_dump( client_context->ldap_account ); */
 #endif
         /* check if user belong to right groups */

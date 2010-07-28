@@ -21,14 +21,21 @@
 
 #define DODEBUG(verb) ((verb) >= 4)
 
+#include "debug.h"
+#include "ldap_profile.h"
+#include "utils.h"
+
 #include <ldap.h>
 #include <errno.h>
 #include <time.h>
 #include <stdio.h>
 
-#include "debug.h"
-#include "ldap_profile.h"
-#include "utils.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+
 
 ldap_profile_t *
 ldap_profile_new( ){
@@ -364,3 +371,86 @@ ldap_account_get_options_to_string( ldap_account_t *account ){
 
   return res;
 }
+
+
+int
+ldap_profile_write_to_pf_file( char *pf_file, char *value )
+{
+  int fd, rc;
+  if( pf_file == NULL ){
+    LOGERROR( "pf_file is null\n");
+    return -1;
+  }
+
+  fd = open( pf_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU );
+  if( fd == -1 ){
+    LOGERROR( "Could not open file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+    return -1;
+  }
+  rc = write( fd, value, strlen(value) );
+  if( rc == -1 ){
+    LOGERROR( "Could not write value %s to  file %s: (%d) %s\n", value, pf_file, errno, strerror( errno ) );
+  }else if( rc !=strlen(value) ){
+    LOGERROR( "Could not write all of  %s to file %s\n", value, pf_file );
+  }
+  rc = close( fd );
+  if( rc != 0 ){
+    LOGERROR( "Could not close file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+  }
+  return rc == 0;
+}
+
+
+/**
+ * la_ldap_handle_pf_file
+ * Given the plugin config and the client_context
+ * will write to pf_file the right
+ */
+int
+ldap_profile_handle_pf_file(config_t *c, profile_config_t *p, ldap_profile_t *lp, char *pf_file){
+
+  /* check if pf is enabled */
+  LOGDEBUG("Global:%s\tProfile:%s\tPF enable for this profile: %s\n",
+        ternary_to_string(c->profile->enable_pf),
+        ternary_to_string(p->enable_pf),
+        config_is_pf_enabled_for_profile( c, p) ? "TRUE" : "FALSE" );
+  /* write to pf_file */
+  if( pf_file == NULL && config_is_pf_enabled(c) ){
+    LOGERROR("PF is enabled but environment pf_file variable is NULL.\n");
+  }else if( pf_file ){
+    if( config_is_pf_enabled_for_profile( c, p) ){
+      if( lp->pf_rules ){
+        ldap_profile_write_to_pf_file( pf_file, lp->pf_rules );
+      }else{
+        /* set up default pf_rules */
+        /* TODO, set default pf rules per profiles */
+        ldap_profile_write_to_pf_file( pf_file, PF_ALLOW_ALL);
+      }
+    }else{
+        /* profile has PF disabled */
+        ldap_profile_write_to_pf_file( pf_file, PF_ALLOW_ALL );
+    }
+  }
+  return 0;
+}
+
+/**
+ * la_ldap_handle_allowed_timeframe
+ * check if a user LDAP profile can log in
+ * return 0 on success
+ */
+int
+ldap_profile_handle_allowed_timeframe( ldap_profile_t *p ){
+  time_t now = time(NULL);
+  if( !( p->start_date == 0 || p->start_date < now )
+      ||
+      !( p->end_date == 0 || p->end_date > now ) ){
+    LOGINFO("user time period: %d/%d is not allowed to connect at %d\n", p->start_date, p->end_date, now);
+    return 1;
+  }
+  LOGINFO("user time period: %d/%d is allowed to connect at %d\n", p->start_date, p->end_date, now);
+  return 0;
+}
+
+
+
