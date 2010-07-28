@@ -39,6 +39,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#define PF_ALLOW_ALL "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n"
+
 /* write a value to pf_file */
 int
 write_to_pf_file( char *pf_file, char *value )
@@ -372,6 +375,39 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   return res;
 }
 
+/**
+ * la_ldap_handle_pf_file
+ * Given the plugin config and the client_context
+ * will write to pf_file the right
+ */
+int la_ldap_handle_pf_file(config_t *c, client_context_t *cc, char *pf_file){
+  profile_config_t *p = cc->profile;
+  ldap_profile_t *lp = cc->ldap_account->profile;
+
+  /* check if pf is enabled */
+  LOGDEBUG("Global:%s\tProfile:%s\tPF enable for this profile: %s\n",
+        ternary_to_string(c->profile->enable_pf),
+        ternary_to_string(p->enable_pf),
+        config_is_pf_enabled_for_profile( c, p) ? "TRUE" : "FALSE" );
+  /* write to pf_file */
+  if( pf_file == NULL && config_is_pf_enabled(c) ){
+    LOGERROR("PF is enabled but environment pf_file variable is NULL.\n");
+  }else if( pf_file ){
+    if( config_is_pf_enabled_for_profile( c, p) ){ 
+      if( lp->pf_rules ){
+        write_to_pf_file( pf_file, lp->pf_rules );
+      }else{
+        /* set up default pf_rules */
+        /* TODO, set default pf rules per profiles */
+        write_to_pf_file( pf_file, PF_ALLOW_ALL);
+      }
+    }else{
+        /* profile has PF disabled */
+        write_to_pf_file( pf_file, PF_ALLOW_ALL );
+    }
+  }
+  return 0;
+}
 
 int
 la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
@@ -430,7 +466,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
 #ifdef ENABLE_LDAPUSERCONF
         time_t now = time(NULL);
         LOGWARNING( "ldap_account_load_from_dn returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account ));
-        /* TODO check if user timeframe is allowed start_date, end_date */
+        /* check if user timeframe is allowed start_date, end_date */
         if( ( client_context->ldap_account->profile->start_date == 0 || client_context->ldap_account->profile->start_date < now )
             &&
             ( client_context->ldap_account->profile->end_date == 0 || client_context->ldap_account->profile->end_date > now ) ){
@@ -440,16 +476,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
           res = OPENVPN_PLUGIN_FUNC_ERROR;
           goto la_ldap_handle_authentication_free;
         }
-        LOGDEBUG("start date; %d. end date: %d\n", client_context->ldap_account->profile->start_date, client_context->ldap_account->profile->end_date);
-        /* write to pf_file */
-        if( config->enable_pf ){
-          if( client_context->ldap_account->profile->pf_rules && auth_context->pf_file ){
-            write_to_pf_file( auth_context->pf_file, client_context->ldap_account->profile->pf_rules );
-          }else{
-            /* set up default pf_rules */
-            write_to_pf_file( auth_context->pf_file, "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n");
-          }
-        }
+        la_ldap_handle_pf_file( config, client_context, auth_context->pf_file );
         /* ldap_account_dump( client_context->ldap_account ); */
 #endif
         /* check if user belong to right groups */

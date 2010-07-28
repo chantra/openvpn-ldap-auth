@@ -24,23 +24,8 @@
 #define _UTILS_H_
 
 #include <stdlib.h>
+#include "types.h"
 #define FREE_IF_NOT_NULL(a) if (a != NULL) la_free (a)
-
-/* bool definitions */
-#ifndef bool
-#define bool int
-#endif
-
-#ifndef true
-#define true 1
-#endif
-
-#ifndef false
-#define false 0
-#endif
-
-#define BOOL_CAST(x) ((x) ? (true) : (false))
-
 /* memory allocation */
 extern void *la_malloc( size_t size );
 extern void la_free( void *ptr );

@@ -278,10 +278,11 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
   
 #ifdef ENABLE_LDAPUSERCONF
   /* when ldap userconf is define, we need to hook onto those callbacks */
+  if( config_is_pf_enabled( context->config )){
+    *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF);
+  }
   *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2)
                 | OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_DISCONNECT);
-  if( context->config->enable_pf )
-    *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF);
 #endif
 
   const char *verb_string = get_env ("verb", envp);

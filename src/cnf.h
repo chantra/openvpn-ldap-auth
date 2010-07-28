@@ -23,6 +23,7 @@
 #define _CNF_H_
 
 #include "list.h"
+#include "types.h"
 
 
 typedef enum ldap_search_scope{
@@ -65,6 +66,7 @@ typedef struct profile_config{
   char        *group_search_filter;
   char        *member_attribute;
   char        *profiledn;
+  ternary_t enable_pf;
 } profile_config_t;
 
 /**
@@ -75,7 +77,6 @@ typedef struct config{
   ldap_config_t    *ldap;
   profile_config_t  *profile;
   list_t    *profiles;
-  int enable_pf;
 } config_t;
 
 extern int config_parse_file( const char *filename, config_t *c );
@@ -83,6 +84,9 @@ extern int config_parse_file( const char *filename, config_t *c );
 extern config_t *config_new( void );
 extern config_t *config_dup( config_t *c );
 extern void config_free( config_t *c );
-extern void config_dump( config_t *c);
-extern void config_set_default( config_t *c);
+extern void config_dump( config_t *c );
+extern void config_set_default( config_t *c );
+
+extern int config_is_pf_enabled( config_t *c );
+extern int config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p );
 #endif /* _CNF_H_ */

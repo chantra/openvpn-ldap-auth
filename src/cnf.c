@@ -188,6 +188,7 @@ profile_config_dup( const profile_config_t *c ){
   if( c->groupdn ) nc->groupdn = strdup( c->groupdn );
   if( c->group_search_filter ) nc->group_search_filter = strdup( c->group_search_filter );
   if( c->member_attribute ) nc->member_attribute = strdup( c->member_attribute );
+  nc->enable_pf = c->enable_pf;
 
   return nc;
 }
@@ -204,7 +205,6 @@ config_new( void ){
   c->ldap = ldap_config_new( );
   c->profile = profile_config_new( );
   c->profiles = list_new( );
-  c->enable_pf = 0;
 
   if( !(c->profiles && c->profile && c->ldap) ){
     config_free( c );
@@ -227,7 +227,6 @@ config_dup( config_t *c ){
 
   profile_config_free( nc->profile );
   nc->profile = pgc;
-  nc->enable_pf = c->enable_pf;
 
   for( item = list_first(c->profiles); item; item = item->next ){
     pgc = profile_config_dup( item->data );
@@ -338,7 +337,7 @@ config_parse_file( const char *filename, config_t *c ){
         if( !c->ldap->timeout ) c->ldap->timeout = atoi(val);
       /* global conf */
       }else if( !strcmp( arg, "enable_pf" ) ){
-        c->enable_pf = !(strcasecmp( val, "true") && strcasecmp( val, "on" ) && strcasecmp( val, "1")) ? 1 : 0;
+        current_profile->enable_pf = !(strcasecmp( val, "true") && strcasecmp( val, "on" ) && strcasecmp( val, "1")) ? TERN_TRUE : TERN_FALSE;
       }else if ( !strcmp( arg, "basedn" ) ){
         STRDUP_IFNOTSET(current_profile->basedn, val );
       }else if ( !strcmp( arg, "search_filter" ) ){
@@ -378,6 +377,7 @@ config_dump( config_t *c){
   fprintf( stderr, "\tLDAP TIMEOUT:\t%d\n", c->ldap->timeout );
   fprintf( stderr, "*Default Profile:*\n" );
   STRPRINT_IFSET(c->profile->basedn, "\tBaseDN");
+  fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(c->profile->enable_pf));
   fprintf( stderr, "\tSearch Scope:\t%d\n", c->profile->search_scope );
   fprintf( stderr, "\tSearch filter:\t%s\n", c->profile->search_filter );
   STRPRINT_IFSET(c->profile->groupdn,"\tGroupDN");
@@ -391,6 +391,7 @@ config_dump( config_t *c){
     p = item->data;
     fprintf( stderr, "*Custom Profile:*\n" );
     STRPRINT_IFSET(p->basedn, "\tBaseDN");
+    fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(p->enable_pf));
     fprintf( stderr, "\tSearch Scope:\t%d\n", p->search_scope );
     fprintf( stderr, "\tSearch filter:\t%s\n", p->search_filter );
     STRPRINT_IFSET(p->groupdn,"\tGroupDN");
@@ -399,4 +400,27 @@ config_dump( config_t *c){
     STRPRINT_IFSET(p->profiledn,"\tProfile DN");
 
   }
+}
+
+int
+config_is_pf_enabled( config_t *c ){
+  int enabled = 0;
+  list_item_t *item;
+  if( c->profile->enable_pf == TERN_TRUE )
+    return 1;
+
+  for( item = list_first( c->profiles ); item; item = item->next ){
+    profile_config_t *pc = item->data;
+    if( pc->enable_pf == TERN_TRUE ){
+      enabled = 1;
+      break;
+    }
+  }
+  return enabled;
+}
+int
+config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p ){
+  return (c->profile->enable_pf != TERN_TRUE && p->enable_pf == TERN_TRUE)
+              ||
+            ( c->profile->enable_pf == TERN_TRUE && p->enable_pf != TERN_FALSE); 
 }
