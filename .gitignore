@@ -7,6 +7,7 @@
 .*.swp
 *~
 openvpn-ldap-search
+openvpn-ldap-auth-test
 m4
 depcomp
 install-sh
