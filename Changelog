@@ -1,3 +1,7 @@
+version 0.0.5
+	* group_search_filter needs to be enclosed in parentheses
+	* support for multiple account profiles
+
 version 0.0.4 2010-07-19
 	* Only one thread is handling authentication
 

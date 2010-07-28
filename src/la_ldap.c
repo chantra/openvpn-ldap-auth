@@ -303,7 +303,7 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   char *search_filter = NULL;
   int rc;
   int res = 1;
-  char filter[]="(&(%s=%s)(%s))";
+  char filter[]="(&(%s=%s)%s)";
 
   /* arguments sanity check */
   if( !ldap_context || !userdn || !ldap){
