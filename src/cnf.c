@@ -204,6 +204,7 @@ config_new( void ){
   c->ldap = ldap_config_new( );
   c->profile = profile_config_new( );
   c->profiles = list_new( );
+  c->enable_pf = 0;
 
   if( !(c->profiles && c->profile && c->ldap) ){
     config_free( c );
@@ -226,6 +227,7 @@ config_dup( config_t *c ){
 
   profile_config_free( nc->profile );
   nc->profile = pgc;
+  nc->enable_pf = c->enable_pf;
 
   for( item = list_first(c->profiles); item; item = item->next ){
     pgc = profile_config_dup( item->data );
@@ -335,6 +337,8 @@ config_parse_file( const char *filename, config_t *c ){
       }else if( !strcmp( arg, "timeout" ) ){
         if( !c->ldap->timeout ) c->ldap->timeout = atoi(val);
       /* global conf */
+      }else if( !strcmp( arg, "enable_pf" ) ){
+        c->enable_pf = !(strcasecmp( val, "true") && strcasecmp( val, "on" ) && strcasecmp( val, "1")) ? 1 : 0;
       }else if ( !strcmp( arg, "basedn" ) ){
         STRDUP_IFNOTSET(current_profile->basedn, val );
       }else if ( !strcmp( arg, "search_filter" ) ){

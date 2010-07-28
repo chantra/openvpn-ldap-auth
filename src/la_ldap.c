@@ -32,6 +32,7 @@
 
 #ifdef ENABLE_LDAPUSERCONF
 #include "ldap_profile.h"
+#include "time.h"
 #endif
 
 #include <sys/types.h>
@@ -427,14 +428,27 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
         if( DODEBUG( l->verb ) )
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
 #ifdef ENABLE_LDAPUSERCONF
-        LOGWARNING( "ldap_account returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account ));
+        time_t now = time(NULL);
+        LOGWARNING( "ldap_account_load_from_dn returned: %d\n", ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account ));
         /* TODO check if user timeframe is allowed start_date, end_date */
-        /* write to pf_file */
-        if( client_context->ldap_account->profile->pf_rules && auth_context->pf_file ){
-          write_to_pf_file( auth_context->pf_file, client_context->ldap_account->profile->pf_rules );
+        if( ( client_context->ldap_account->profile->start_date == 0 || client_context->ldap_account->profile->start_date < now )
+            &&
+            ( client_context->ldap_account->profile->end_date == 0 || client_context->ldap_account->profile->end_date > now ) ){
+          LOGINFO("user time period: %d/%d is allowed to connect at %d\n", client_context->ldap_account->profile->start_date, client_context->ldap_account->profile->end_date, now);
         }else{
-          /* set up default pf_rules */
-          write_to_pf_file( auth_context->pf_file, "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n");
+          LOGINFO("user time period: %d/%d is not allowed to connect at %d\n", client_context->ldap_account->profile->start_date, client_context->ldap_account->profile->end_date, now);
+          res = OPENVPN_PLUGIN_FUNC_ERROR;
+          goto la_ldap_handle_authentication_free;
+        }
+        LOGDEBUG("start date; %d. end date: %d\n", client_context->ldap_account->profile->start_date, client_context->ldap_account->profile->end_date);
+        /* write to pf_file */
+        if( config->enable_pf ){
+          if( client_context->ldap_account->profile->pf_rules && auth_context->pf_file ){
+            write_to_pf_file( auth_context->pf_file, client_context->ldap_account->profile->pf_rules );
+          }else{
+            /* set up default pf_rules */
+            write_to_pf_file( auth_context->pf_file, "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n");
+          }
         }
         /* ldap_account_dump( client_context->ldap_account ); */
 #endif

@@ -75,6 +75,7 @@ typedef struct config{
   ldap_config_t    *ldap;
   profile_config_t  *profile;
   list_t    *profiles;
+  int enable_pf;
 } config_t;
 
 extern int config_parse_file( const char *filename, config_t *c );
