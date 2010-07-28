@@ -1,7 +1,7 @@
 /**
  * vim: tabstop=2:shiftwidth=2:softtabstop=2:expandtab
  *
- * testplugin.c
+ * openvpn-ldap-auth-test.c
  * OpenVPN LDAP Authentication Plugin Test Driver
  *
  * Copyright (c) 2005 Landon Fuller <landonf@threerings.net>
@@ -42,7 +42,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define SLEEP_TIME 5
+#define SLEEP_TIME 1
 
 const char username_template[] = "username=";
 const char password_template[] = "password=";
@@ -52,7 +52,7 @@ struct openvpn_plugin_string_list *return_list = NULL;
 int main(int argc, const char *argv[]) {
 	openvpn_plugin_handle_t handle;
 	unsigned int type;
-	const char *envp[6]; /* username, password, verb, ifconfig_pool_remote_ip, NULL */
+	const char *envp[7]; /* username, password, verb, ifconfig_pool_remote_ip, auth_confrol_file, [pf_file], NULL */
 	char username[30];
 	char *password;
 	int loops;
@@ -89,16 +89,28 @@ int main(int argc, const char *argv[]) {
 	envp[2] = "ifconfig_pool_remote_ip=10.0.50.1";
   envp[3] = "verb=4";
   envp[4] = "auth_control_file=/tmp/foobar_ctrl_file.txt";
-	envp[5] = NULL;
 
 	handle = openvpn_plugin_open_v2(&type, argv, envp, NULL);
 
 	if (!handle)
 		errx(1, "Initialization Failed!\n");
 
+  if( type & OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF) ){
+    envp[5] = "pf_file=/tmp/foobar_pf_file.txt";
+    envp[6] = NULL;
+  }else{
+	  envp[5] = NULL;
+  }
+
 	/* Authenticate */
   for( ; loops; --loops ){
     client_context = openvpn_plugin_client_constructor_v1( handle );
+    if( type & OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF) ){
+      err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_ENABLE_PF, argv, envp, client_context, NULL);
+      printf("Enable PF: %s\n", err == OPENVPN_PLUGIN_FUNC_SUCCESS ? "True" : "False" );
+    }else{
+        printf("Enable PF: Not enabled\n");
+    }
     err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp, client_context, NULL);
     if (err == OPENVPN_PLUGIN_FUNC_ERROR) {
       printf("Authorization Failed!\n");
