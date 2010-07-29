@@ -507,7 +507,7 @@ action_thread_main_loop (void *c)
   int loop = 1;
   while( loop ){
     action = action_pop(context->action_list);
-    /* TODO, do some action */
+    /* handle action */
     if (action){
       switch (action->type){
         case LDAP_AUTH_ACTION_AUTH:

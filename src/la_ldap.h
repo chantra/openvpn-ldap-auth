@@ -83,6 +83,11 @@ extern ldap_context_t * ldap_context_new( void );
 extern void la_ldap_set_timeout( config_t *conf, struct timeval *timeout);
 /**
  * handle authentication action
+ * takes care of:
+ *  - checking if user exists
+ *  - user/pass is correct
+ *  - load LDAP profile data if any
+ *  - write PF rules if needed
  */
 extern int la_ldap_handle_authentication( ldap_context_t *l, action_t *a);
 

@@ -35,9 +35,12 @@ typedef struct ldap_profile
 {
   time_t               start_date;
   time_t               end_date;
-  char                *pf_rules;
+  ternary_t           pf_client_default_accept;
+  ternary_t           pf_subnet_default_accept;
+  char                *pf_client_rules;
+  char                *pf_subnet_rules;
   list_t              *push_options;
-  uint8_t              push_reset;
+  ternary_t           push_reset;
   list_t              *iroutes;
   char                *config;
 } ldap_profile_t;

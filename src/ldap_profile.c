@@ -43,9 +43,13 @@ ldap_profile_new( ){
   l = la_malloc( sizeof( ldap_profile_t ) );
   if( !l ) return NULL;
   l->start_date = l->end_date = 0;
-  l->pf_rules = NULL;
+  /* PF */
+  l->pf_client_default_accept = TERN_UNDEF;
+  l->pf_subnet_default_accept = TERN_UNDEF;
+  l->pf_client_rules = NULL;
+  l->pf_subnet_rules = NULL;
   l->config = NULL;
-  l->push_reset = 0;
+  l->push_reset = TERN_UNDEF;
   l->iroutes = list_new( );
   l->push_options = list_new( );
   if( l->iroutes == NULL || l->push_options == NULL ){
@@ -58,7 +62,8 @@ ldap_profile_new( ){
 void
 ldap_profile_free( ldap_profile_t *l ){
   if( !l ) return;
-  if( l->pf_rules ) la_free( l->pf_rules );
+  if( l->pf_client_rules ) la_free( l->pf_client_rules );
+  if( l->pf_subnet_rules ) la_free( l->pf_subnet_rules );
   if( l->push_options ) list_free ( l->push_options, la_free );
   if( l->iroutes ) list_free( l->iroutes, la_free );
   if( l->config ) la_free( l->config );
@@ -71,12 +76,18 @@ ldap_profile_dump( ldap_profile_t *l ){
   fprintf(stdout, "Account profile:\n\
 \tstart_date:\t\t%u\n\
 \tend_date:\t\t%u\n\
-\tpf_rules:\t\t%s\n\
+\tpf_client_default_accept:\t\t%s\n\
+\tpf_subnet_default_accept:\t\t%s\n\
+\tpf_client_rules:\t\t%s\n\
+\tpf_subnet_rules:\t\t%s\n\
 \tpush_reset:\t\t%s\n\
 \tconfig:\t\t%s\n",
     (unsigned int)l->start_date, (unsigned int)l->end_date,
-    l->pf_rules ? l->pf_rules : "None",
-    l->push_reset ? "TRUE" : "FALSE",
+    l->pf_client_default_accept == TERN_TRUE ? "ACCEPT" : l->pf_client_default_accept == TERN_FALSE ? "DROP": "Undef",
+    l->pf_subnet_default_accept == TERN_TRUE ? "ACCEPT" : l->pf_subnet_default_accept == TERN_FALSE ? "DROP" : "Undef",
+    l->pf_client_rules ? l->pf_client_rules : "None",
+    l->pf_subnet_rules ? l->pf_subnet_rules : "None",
+    l->push_reset == TERN_TRUE ? "TRUE" : l->push_reset == TERN_FALSE ? "FALSE" : "Undef",
     l->config ? l->config : "None");
   fprintf( stdout, "\tpush options:\n" );
   list_item_t *i;
@@ -127,6 +138,24 @@ ldap_account_dump( ldap_account_t *l ){
           l->profile_dn ? l->profile_dn : "None");
   ldap_profile_dump( l->profile );
 }
+
+/**
+ * Converts a LDAP boolean value to a ternary
+ * If value is neither true/on/false/off
+ * TERN_UNDEF is returned
+ */
+ternary_t
+la_ldap_bool_to_ternary( char *value ){
+  if( value == NULL )
+    return TERN_UNDEF;
+
+  if( strcasecmp( value, "true" ) == 0 || strcasecmp( value, "on" ))
+    return TERN_TRUE;
+  if( strcasecmp( value, "false" ) == 0 || strcasecmp( value, "off" ))
+    return TERN_FALSE;
+  return TERN_UNDEF;
+}
+
 /**
  * convert a LDAP GeneralizedTime string to a time_t.
  * t will be set to 0 if generalized time is
@@ -193,17 +222,22 @@ ldap_account_load_from_entry( LDAP *ldap, LDAPMessage *e, ldap_account_t *accoun
       }else{
         account->profile->end_date = t;
       }
-    }else if( strcasecmp( attr, "OvpnPFRules" ) == 0 ){
-      if( account->profile->pf_rules ) la_free( account->profile->pf_rules );
-      account->profile->pf_rules = strdup( vals[0]->bv_val );
+    }else if( strcasecmp( attr, "OvpnPFRulesClientDefaultAccept" ) == 0 ){
+      account->profile->pf_client_default_accept = la_ldap_bool_to_ternary( vals[0]->bv_val );
+    }else if( strcasecmp( attr, "OvpnPFRulesSubnetDefaultAccept" ) == 0 ){
+      account->profile->pf_subnet_default_accept = la_ldap_bool_to_ternary( vals[0]->bv_val );
+    }else if( strcasecmp( attr, "OvpnPFRulesClient" ) == 0 ){
+      if( account->profile->pf_client_rules ) la_free( account->profile->pf_client_rules );
+      account->profile->pf_client_rules = strdup( vals[0]->bv_val );
+    }else if( strcasecmp( attr, "OvpnPFRulesSubnet" ) == 0 ){
+      if( account->profile->pf_subnet_rules ) la_free( account->profile->pf_subnet_rules );
+      account->profile->pf_subnet_rules = strdup( vals[0]->bv_val );
     }else if( strcasecmp( attr, "OvpnCCDPushOption" ) == 0 ){
       for( i = 0; vals[i]; i++){
         list_append( account->profile->push_options, (void *)strdup( vals[i]->bv_val ) );
       }
     }else if( strcasecmp( attr, "OvpnCCDPushReset" ) == 0 ){
-      char *boolean = vals[0]->bv_val;
-      if( strcasecmp( boolean, "true" ) == 0 || strcasecmp( boolean, "on" ) )
-        account->profile->push_reset = 1;
+      account->profile->push_reset = la_ldap_bool_to_ternary( vals[0]->bv_val );
     }else if( strcasecmp( attr, "OvpnCCDIRoute" ) == 0 ){
       for( i = 0; vals[i]; i++){
         list_append( account->profile->iroutes, (void *) strdup( vals[i]->bv_val ) );
@@ -333,7 +367,7 @@ ldap_account_get_options_to_string( ldap_account_t *account ){
   uint8_t tot_size = 0;
   list_item_t *elem = NULL;
   char *res = NULL;
-  if (account->profile->push_reset)
+  if (account->profile->push_reset == TERN_TRUE)
       tot_size += sizeof("push-reset\n");
   if (account->ifconfig_push)
       tot_size += sizeof("ifconfig \n") + strlen(account->ifconfig_push);
@@ -355,7 +389,7 @@ ldap_account_get_options_to_string( ldap_account_t *account ){
   res = la_malloc( tot_size );
   la_memset( res, 0, tot_size);
 
-  if (account->profile->push_reset)
+  if (account->profile->push_reset == TERN_TRUE)
     strcat( res, "push-reset\n");
   if (account->ifconfig_push)
     strcatf( res, "ifconfig %s\n", account->ifconfig_push );
@@ -374,31 +408,64 @@ ldap_account_get_options_to_string( ldap_account_t *account ){
 }
 
 
+/**
+ * return a static string interpreting
+ * LDAP pf_[client|subnet]_default_accept
+ * suitable for pf_file insertion
+ */
+char *
+la_ldap_default_rule_to_string( ternary_t rule ){
+  if( rule == TERN_TRUE )
+    return "ACCEPT";
+  if( rule == TERN_FALSE )
+    return "DROP";
+  return "";
+}
+
+char *
+ldap_profile_generate_pf_rules( ldap_profile_t *lp ){
+  char *res = NULL;
+  res = strdupf("[CLIENTS %s]\n\
+%s\n\
+[SUBNETS %s]\n\
+%s\n\
+[END]\n",
+      la_ldap_default_rule_to_string( lp->pf_client_default_accept ),
+      lp->pf_client_rules ? lp->pf_client_rules : "",
+      la_ldap_default_rule_to_string( lp->pf_subnet_default_accept ),
+      lp->pf_subnet_rules ? lp->pf_subnet_rules : "" );
+  LOGDEBUG("pf_rules = %s\n", res);
+  return res;
+}
+
 int
 ldap_profile_write_to_pf_file( char *pf_file, char *value )
 {
-  int fd, rc;
+  int fd, rc = 0;
   if( pf_file == NULL ){
     LOGERROR( "pf_file is null\n");
-    return -1;
+    return 1;
   }
 
   fd = open( pf_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU );
   if( fd == -1 ){
     LOGERROR( "Could not open file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
-    return -1;
+    return 1;
   }
   rc = write( fd, value, strlen(value) );
   if( rc == -1 ){
     LOGERROR( "Could not write value %s to  file %s: (%d) %s\n", value, pf_file, errno, strerror( errno ) );
+    rc = 1;
   }else if( rc !=strlen(value) ){
     LOGERROR( "Could not write all of  %s to file %s\n", value, pf_file );
+    rc = 1;
+  }else{
+    rc = 0;
   }
-  rc = close( fd );
-  if( rc != 0 ){
+  if( close( fd ) != 0 ){
     LOGERROR( "Could not close file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
   }
-  return rc == 0;
+  return rc;
 }
 
 
@@ -409,7 +476,7 @@ ldap_profile_write_to_pf_file( char *pf_file, char *value )
  */
 int
 ldap_profile_handle_pf_file(config_t *c, profile_config_t *p, ldap_profile_t *lp, char *pf_file){
-
+  int rc = 0;
   /* check if pf is enabled */
   LOGDEBUG("Global:%s\tProfile:%s\tPF enable for this profile: %s\n",
         ternary_to_string(c->profile->enable_pf),
@@ -418,21 +485,38 @@ ldap_profile_handle_pf_file(config_t *c, profile_config_t *p, ldap_profile_t *lp
   /* write to pf_file */
   if( pf_file == NULL && config_is_pf_enabled(c) ){
     LOGERROR("PF is enabled but environment pf_file variable is NULL.\n");
+    return 1;
   }else if( pf_file ){
     if( config_is_pf_enabled_for_profile( c, p) ){
-      if( lp->pf_rules ){
-        ldap_profile_write_to_pf_file( pf_file, lp->pf_rules );
+      /* We only write PF rules from LDAP if
+       * pf_client_default_accept and pf_subnet_default_accept
+       * are defined
+       */
+      if( lp->pf_client_default_accept != TERN_UNDEF && lp->pf_subnet_default_accept != TERN_UNDEF ){
+        char *pf_rules = NULL;
+        pf_rules = ldap_profile_generate_pf_rules( lp );
+        if( pf_rules ){
+          rc = ldap_profile_write_to_pf_file( pf_file, pf_rules );
+          la_free( pf_rules );
+        }else{
+          LOGERROR("ldap_profile_handle_pf_file: could not generate pf_rules\n");
+          return 1;
+        }
       }else{
         /* set up default pf_rules */
-        /* TODO, set default pf rules per profiles */
-        ldap_profile_write_to_pf_file( pf_file, PF_ALLOW_ALL);
+        /*
+         * If pf_client_default_accept or pf_subnet_default_accept
+         * is not defined, we default to openvpn standard behaviour:
+         * allow everything
+         */
+        return ldap_profile_write_to_pf_file( pf_file, PF_ALLOW_ALL);
       }
     }else{
         /* profile has PF disabled */
-        ldap_profile_write_to_pf_file( pf_file, PF_ALLOW_ALL );
+        return ldap_profile_write_to_pf_file( pf_file, PF_ALLOW_ALL );
     }
   }
-  return 0;
+  return rc;
 }
 
 /**

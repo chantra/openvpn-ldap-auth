@@ -28,3 +28,4 @@ Makefile
 configure
 config.h
 testplugin
+tools/

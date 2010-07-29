@@ -397,7 +397,7 @@ config_dump( config_t *c){
   STRPRINT_IFSET(c->profile->group_search_filter, "\tGroup Search Filter");
   STRPRINT_IFSET(c->profile->member_attribute,"\tMember Attribute");
   STRPRINT_IFSET(c->profile->profiledn,"\tProfile DN");
-  /* TODO finish dumping info */
+  /* Dump each profiles */
   list_item_t *item;
   profile_config_t *p;
   for( item = list_first( c->profiles ); item; item = item->next){

@@ -94,6 +94,7 @@ la_ldap_set_timeout( config_t *conf, struct timeval *timeout){
 
 /**
  * la_ldap_errno
+ * return the last set error
  */
 int
 la_ldap_errno( LDAP *ldap ){
@@ -102,6 +103,9 @@ la_ldap_errno( LDAP *ldap ){
   return rc;
 }
 
+/**
+ * Translate config scope values to ldap scope values
+ */
 static int
 la_ldap_config_search_scope_to_ldap( ldap_search_scope_t scope ){
   int ldap_scope = 0;
@@ -127,6 +131,13 @@ la_ldap_ldap_scope_to_string( int scope ){
   }
   return NULL;
 }
+/**
+ * Search for a user's DN given a config profile
+ * On success, return userdn (much be freed by caller)
+ * On error, return NULL
+ */
+
+
 char *
 ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char *username, profile_config_t *p){
   char *userdn = NULL;
@@ -186,9 +197,16 @@ ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char
   return userdn;
 
 }
+
 /**
  * Search for a user's DN
- * Given a search_filter and context, will search for
+ * Given a search_filter and context, will search for a user
+ * Each profiles will be tried one after another one until a
+ * match is found or no more profile are available
+ * On success
+ *  * return userdn (much be freed by caller)
+ *  * set set userdn and used profile in client_context
+ * On error, return NULL
  */
 char *
 ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, client_context_t *cc ){
@@ -395,6 +413,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
       goto la_ldap_handle_authentication_free;
   }
 
+  /* find user and return userdn */
   userdn = ldap_find_user( ldap, l, auth_context->username, client_context );
   if( !userdn ){
     LOGWARNING( "LDAP user *%s* was not found \n", auth_context->username );
@@ -403,13 +422,8 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
   
   if (auth_context && l->config ){
       if (auth_context->username && strlen (auth_context->username) > 0 && auth_context->password){
-      /** TODO authenticate user */
       if (DODEBUG (l->verb)) {
-        #if 0
-          LOGINFO ("LDAP-AUTH: Authenticating Username:%s Password:%s\n", auth_context->username, auth_context->password);
-        #else
           LOGINFO ("LDAP-AUTH: Authenticating Username:%s\n", auth_context->username );
-        #endif
       }
       rc = ldap_binddn( ldap, userdn, auth_context->password );
       if( rc != LDAP_SUCCESS ){
@@ -419,12 +433,14 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
         if( DODEBUG( l->verb ) )
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
 #ifdef ENABLE_LDAPUSERCONF
+        /* load user settings from LDAP profile */
         ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account );
         /* check if user timeframe is allowed start_date, end_date */
         if( ldap_profile_handle_allowed_timeframe( client_context->ldap_account->profile ) != 0 ){
           res = OPENVPN_PLUGIN_FUNC_ERROR;
           goto la_ldap_handle_authentication_free;
         }
+        /* handle pf_rules if any, default value otherwise */
         ldap_profile_handle_pf_file( config, client_context->profile, client_context->ldap_account->profile, auth_context->pf_file );
         /* ldap_account_dump( client_context->ldap_account ); */
 #endif
