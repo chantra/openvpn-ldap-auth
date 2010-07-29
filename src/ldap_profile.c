@@ -111,7 +111,9 @@ ldap_account_free( ldap_account_t *l){
   if( !l ) return;
   if( l->profile ) ldap_profile_free( l->profile );
   if( l->ifconfig_push ) la_free( l->ifconfig_push );
-  if( l->profile_dn ) la_free( l->profile_dn );
+  if( l->profile_dn ){
+     la_free( l->profile_dn );
+  }
   la_free( l );
 }
 
@@ -174,7 +176,6 @@ ldap_account_load_from_entry( LDAP *ldap, LDAPMessage *e, ldap_account_t *accoun
 
   for( attr = ldap_first_attribute( ldap, e, &berptr ); attr != NULL; attr = ldap_next_attribute( ldap, e, berptr ) ){
     vals = ldap_get_values_len( ldap, e, attr );
-    printf("attribute: %s: %d\n", attr, ldap_count_values_len( vals ));
     if( ldap_count_values_len( vals ) < 1 )
       goto ldap_account_load_from_entry_end_loop;
 

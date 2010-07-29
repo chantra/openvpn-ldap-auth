@@ -102,7 +102,31 @@ la_ldap_errno( LDAP *ldap ){
   return rc;
 }
 
+static int
+la_ldap_config_search_scope_to_ldap( ldap_search_scope_t scope ){
+  int ldap_scope = 0;
+  if( scope == LA_SCOPE_BASE )
+    ldap_scope = LDAP_SCOPE_BASE;
+  else if( scope == LA_SCOPE_ONELEVEL )
+    ldap_scope = LDAP_SCOPE_ONELEVEL;
+  else if( scope == LA_SCOPE_SUBTREE )
+    ldap_scope = LDAP_SCOPE_SUBTREE;
 
+  return ldap_scope;
+}
+
+static const char *
+la_ldap_ldap_scope_to_string( int scope ){
+  switch( scope ){
+    case LDAP_SCOPE_BASE:
+      return "BASE";
+    case LDAP_SCOPE_ONELEVEL:
+      return "ONELEVEL";
+    case LDAP_SCOPE_SUBTREE:
+      return "SUBTREE";
+  }
+  return NULL;
+}
 char *
 ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char *username, profile_config_t *p){
   char *userdn = NULL;
@@ -126,13 +150,8 @@ ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char
     search_filter = str_replace(config->profile->search_filter, "%u", username );
   }
   if( DODEBUG( ldap_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, p->basedn );
-  if( p->search_scope == LA_SCOPE_BASE )
-    ldap_scope = LDAP_SCOPE_BASE;
-  else if( p->search_scope == LA_SCOPE_ONELEVEL )
-    ldap_scope = LDAP_SCOPE_ONELEVEL;
-  else if( p->search_scope == LA_SCOPE_SUBTREE )
-    ldap_scope = LDAP_SCOPE_SUBTREE;
+    LOGINFO( "Searching user using filter %s with basedn: %s and scope %s\n", search_filter, p->basedn, la_ldap_ldap_scope_to_string( p->search_scope ) );
+  ldap_scope = la_ldap_config_search_scope_to_ldap( p->search_scope );
   rc = ldap_search_ext_s( ldap, p->basedn, ldap_scope, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
   if( rc == LDAP_SUCCESS ){
     /* Check how many entries were found. Only one should be returned */
@@ -161,7 +180,7 @@ ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char
   if( dn ){
     userdn = strdup( dn );
     /* finally, if a DN was returned, free it */
-    if( dn ) ldap_memfree( dn );
+    ldap_memfree( dn );
   }
   if( search_filter ) free( search_filter );
   return userdn;
@@ -192,6 +211,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, 
     p = config->profile;
     userdn = ldap_find_user_for_profile( ldap, ldap_context, username, p );
     if( userdn ){
+      if( cc->user_dn ) la_free( cc->user_dn );
       cc->user_dn = strdup( userdn );
       cc->profile = p;
     }
@@ -200,6 +220,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, 
       p = item->data;
       userdn = ldap_find_user_for_profile( ldap, ldap_context, username, p );
       if( userdn ){
+        if( cc->user_dn ) la_free( cc->user_dn );
         cc->user_dn = strdup( userdn );
         cc->profile = p;
         break;
@@ -295,7 +316,7 @@ ldap_binddn( LDAP *ldap, const char *username, const char *password ){
  * Check if userdn belongs to group
  */
 int
-ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
+ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, client_context_t *cc ){
   struct timeval timeout;
   char *attrs[] = { NULL };
   LDAPMessage *result;
@@ -304,6 +325,9 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   int rc;
   int res = 1;
   char filter[]="(&(%s=%s)%s)";
+  int ldap_scope = 0;
+  char *userdn = cc->user_dn;
+  profile_config_t *p = cc->profile;
 
   /* arguments sanity check */
   if( !ldap_context || !userdn || !ldap){
@@ -314,13 +338,15 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   
   /* initialise timeout values */
   la_ldap_set_timeout( config, &timeout);
-  if( userdn && config->profile->group_search_filter && config->profile->member_attribute ){
-    search_filter = strdupf(filter,config->profile->member_attribute, userdn, config->profile->group_search_filter);
+  if( userdn && p->group_search_filter && p->member_attribute ){
+    search_filter = strdupf(filter,p->member_attribute, userdn, p->group_search_filter);
   }
-  if( DODEBUG( ldap_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s\n", search_filter, config->profile->groupdn );
 
-  rc = ldap_search_ext_s( ldap, config->profile->groupdn, LDAP_SCOPE_ONELEVEL, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
+  ldap_scope = la_ldap_config_search_scope_to_ldap( p->search_scope );
+  if( DODEBUG( ldap_context->verb ) )
+    LOGINFO( "Searching user using filter %s with basedn: %s and scope %s\n", search_filter, p->groupdn, la_ldap_ldap_scope_to_string( p->search_scope ) );
+
+  rc = ldap_search_ext_s( ldap, p->groupdn, ldap_scope, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
   if( rc == LDAP_SUCCESS ){
     /* Check how many entries were found. Only one should be returned */
     int nbrow = ldap_count_entries( ldap, result );
@@ -402,9 +428,10 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
         ldap_profile_handle_pf_file( config, client_context->profile, client_context->ldap_account->profile, auth_context->pf_file );
         /* ldap_account_dump( client_context->ldap_account ); */
 #endif
+
         /* check if user belong to right groups */
-        if( config->profile->groupdn && config->profile->group_search_filter && config->profile->member_attribute ){
-            rc = ldap_group_membership( ldap, l, userdn );
+        if( client_context->profile->groupdn && client_context->profile->group_search_filter && client_context->profile->member_attribute ){
+            rc = ldap_group_membership( ldap, l, client_context  );
             if( rc == 0 ){
               res = OPENVPN_PLUGIN_FUNC_SUCCESS;
             }

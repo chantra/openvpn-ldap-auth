@@ -353,9 +353,9 @@ config_parse_file( const char *filename, config_t *c ){
       }else if( !strcmp( arg, "groupdn" ) ){
         STRDUP_IFNOTSET(current_profile->groupdn, val );
       }else if( !strcmp( arg, "group_search_filter" ) ){
-        STRDUP_IFNOTSET(c->profile->group_search_filter, val );
+        STRDUP_IFNOTSET(current_profile->group_search_filter, val );
       }else if( !strcmp( arg, "member_attribute" ) ){
-        STRDUP_IFNOTSET(c->profile->member_attribute, val );
+        STRDUP_IFNOTSET(current_profile->member_attribute, val );
       }else{
         LOGWARNING("Unrecognized option *%s=%s*\n", arg, val);
       }
@@ -367,6 +367,19 @@ config_parse_file( const char *filename, config_t *c ){
 	return 0;
 }
 
+const char *
+config_search_scope_to_string( ldap_search_scope_t scope){
+
+  switch( scope ){
+    case LA_SCOPE_BASE:
+      return "BASE";
+    case LA_SCOPE_ONELEVEL:
+      return "ONELEVEL";
+    case LA_SCOPE_SUBTREE:
+      return "SUBTREE";
+  }
+  return NULL;
+}
 void
 config_dump( config_t *c){
   fprintf( stderr, "Config Dump:\n*LDAP:*\n");
@@ -378,7 +391,7 @@ config_dump( config_t *c){
   fprintf( stderr, "*Default Profile:*\n" );
   STRPRINT_IFSET(c->profile->basedn, "\tBaseDN");
   fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(c->profile->enable_pf));
-  fprintf( stderr, "\tSearch Scope:\t%d\n", c->profile->search_scope );
+  fprintf( stderr, "\tSearch Scope:\t%s\n", config_search_scope_to_string( c->profile->search_scope ) );
   fprintf( stderr, "\tSearch filter:\t%s\n", c->profile->search_filter );
   STRPRINT_IFSET(c->profile->groupdn,"\tGroupDN");
   STRPRINT_IFSET(c->profile->group_search_filter, "\tGroup Search Filter");
@@ -392,7 +405,7 @@ config_dump( config_t *c){
     fprintf( stderr, "*Custom Profile:*\n" );
     STRPRINT_IFSET(p->basedn, "\tBaseDN");
     fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(p->enable_pf));
-    fprintf( stderr, "\tSearch Scope:\t%d\n", p->search_scope );
+    fprintf( stderr, "\tSearch Scope:\t%s\n", config_search_scope_to_string( p->search_scope ) );
     fprintf( stderr, "\tSearch filter:\t%s\n", p->search_filter );
     STRPRINT_IFSET(p->groupdn,"\tGroupDN");
     STRPRINT_IFSET(p->group_search_filter, "\tGroup Search Filter");

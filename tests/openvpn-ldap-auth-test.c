@@ -46,7 +46,7 @@
 
 const char username_template[] = "username=";
 const char password_template[] = "password=";
-void *client_context = NULL;
+void **client_contexts = NULL;
 struct openvpn_plugin_string_list *return_list = NULL;
 
 int main(int argc, const char *argv[]) {
@@ -102,16 +102,23 @@ int main(int argc, const char *argv[]) {
 	  envp[5] = NULL;
   }
 
+  client_contexts = malloc( sizeof( void * ) * loops );
+  if( client_contexts == NULL ){
+    fprintf(stderr, "Could not allocate client contexts\n");
+    return 1;
+  }
+
+  int i;
 	/* Authenticate */
-  for( ; loops; --loops ){
-    client_context = openvpn_plugin_client_constructor_v1( handle );
+  for( i = 0; i < loops; i++ ){
+    client_contexts[i] = openvpn_plugin_client_constructor_v1( handle );
     if( type & OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF) ){
-      err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_ENABLE_PF, argv, envp, client_context, NULL);
+      err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_ENABLE_PF, argv, envp, client_contexts[i], NULL);
       printf("Enable PF: %s\n", err == OPENVPN_PLUGIN_FUNC_SUCCESS ? "True" : "False" );
     }else{
         printf("Enable PF: Not enabled\n");
     }
-    err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp, client_context, NULL);
+    err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY, argv, envp, client_contexts[i], NULL);
     if (err == OPENVPN_PLUGIN_FUNC_ERROR) {
       printf("Authorization Failed!\n");
     } else if( err == OPENVPN_PLUGIN_FUNC_SUCCESS ) {
@@ -119,27 +126,38 @@ int main(int argc, const char *argv[]) {
     }else if ( err == OPENVPN_PLUGIN_FUNC_DEFERRED ){
       printf("Authorization Deferred!\n");
     }
-  }
-  printf( "Sleeping %d seconds to let the threads do some job...\n", SLEEP_TIME );
-  sleep( SLEEP_TIME );
-  //goto free_exit;
-	/* Client Connect */
-	err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_CLIENT_CONNECT_V2, argv, envp, client_context, &return_list);
-	if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
-		printf("client-connect failed!\n");
-	} else {
-		printf("client-connect succeed!\n");
-	}
+    printf( "Sleeping %d seconds to let the threads do some job...\n", SLEEP_TIME );
+    sleep( SLEEP_TIME + 2 );
+    //goto free_exit;
+    /* Client Connect */
+    err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_CLIENT_CONNECT_V2, argv, envp, client_contexts[i], &return_list);
+    if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
+      printf("client-connect failed!\n");
+    } else {
+      printf("client-connect succeed!\n");
+    }
 
-	/* Client Disconnect */
-	err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_CLIENT_DISCONNECT, argv, envp, client_context, NULL);
-	if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
-		printf("client-disconnect failed!\n");
-	} else {
-		printf("client-disconnect succeed!\n");
-	}
-//free_exit:
-  openvpn_plugin_client_destructor_v1( handle, client_context );
+    struct openvpn_plugin_string_list *rl, *next;
+    next = return_list;
+    while( next ){
+      free( next->name);
+      free( next->value);
+      rl = next;
+      next = next->next;
+      free( rl );
+    }
+    /* Client Disconnect */
+    err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_CLIENT_DISCONNECT, argv, envp, client_contexts[i], NULL);
+    if (err != OPENVPN_PLUGIN_FUNC_SUCCESS) {
+      printf("client-disconnect failed!\n");
+    } else {
+      printf("client-disconnect succeed!\n");
+    }
+  //free_exit:
+    openvpn_plugin_client_destructor_v1( handle, client_contexts[i] );
+  }
+
+  free( client_contexts );
   sprintf(command, "lsof -n -p %d", pid);
   //system(command);
 	openvpn_plugin_close_v1(handle);
