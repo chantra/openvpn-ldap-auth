@@ -22,6 +22,10 @@
 #ifndef __LDAP_PROFILE_H__
 #define __LDAP_PROFILE_H__
 
+#include "config.h"
+
+#ifdef ENABLE_LDAPUSERCONF
+
 #include "cnf.h"
 #include "list.h"
 #include "utils.h"
@@ -113,4 +117,5 @@ extern int ldap_profile_handle_pf_file(config_t *c, profile_config_t *p, ldap_pr
  */
 extern int ldap_profile_handle_allowed_timeframe( ldap_profile_t *p );
 
+#endif /* ENABLE_LDAPUSERCONF */
 #endif /* __LDAP_PROFILE_H__ */

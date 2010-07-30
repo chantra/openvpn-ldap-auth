@@ -19,10 +19,13 @@
  *
  */
 
-#define DODEBUG(verb) ((verb) >= 4)
 
-#include "debug.h"
 #include "ldap_profile.h"
+
+#ifdef ENABLE_LDAPUSERCONF
+
+#define DODEBUG(verb) ((verb) >= 4)
+#include "debug.h"
 #include "utils.h"
 
 #include <ldap.h>
@@ -546,3 +549,4 @@ ldap_profile_handle_allowed_timeframe( ldap_profile_t *p ){
 
 
 
+#endif

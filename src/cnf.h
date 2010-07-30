@@ -91,7 +91,8 @@ extern config_t *config_dup( config_t *c );
 extern void config_free( config_t *c );
 extern void config_dump( config_t *c );
 extern void config_set_default( config_t *c );
-
+#ifdef ENABLE_LDAPUSERCONF
 extern int config_is_pf_enabled( config_t *c );
 extern int config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p );
+#endif
 #endif /* _CNF_H_ */

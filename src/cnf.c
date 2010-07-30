@@ -443,7 +443,7 @@ config_dump( config_t *c){
 
   }
 }
-
+#ifdef ENABLE_LDAPUSERCONF
 int
 config_is_pf_enabled( config_t *c ){
   int enabled = 0;
@@ -462,3 +462,4 @@ int
 config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p ){
   return p->enable_pf == TERN_TRUE; 
 }
+#endif
