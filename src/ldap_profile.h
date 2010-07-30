@@ -34,7 +34,6 @@
 #include "client_context.h"
 
 
-#define PF_ALLOW_ALL "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n"
 
 typedef struct ldap_profile
 {
@@ -99,16 +98,6 @@ extern int ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, 
  */
 
 extern char *ldap_account_get_options_to_string( ldap_account_t *account );
-
-/* write a value to pf_file */
-extern int ldap_profile_write_to_pf_file( char *pf_file, char *value );
-
-/**
- * la_ldap_handle_pf_file
- * Given the plugin config, used profile_config and ldap_profile
- * will write to pf_file the right
- */
-extern int ldap_profile_handle_pf_file(config_t *c, profile_config_t *p, ldap_profile_t *lp, char *pf_file);
 
 /**
  * la_ldap_handle_allowed_timeframe

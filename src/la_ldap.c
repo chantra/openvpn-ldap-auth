@@ -34,6 +34,13 @@
 #include "ldap_profile.h"
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#define PF_ALLOW_ALL "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n"
+
 void
 ldap_context_free( ldap_context_t *l ){
   if( !l ) return;
@@ -131,6 +138,138 @@ la_ldap_ldap_scope_to_string( int scope ){
   }
   return NULL;
 }
+
+/**
+ * PF handling
+ */
+
+/**
+ * return a static string interpreting
+ * LDAP pf_[client|subnet]_default_accept
+ * suitable for pf_file insertion
+ */
+char *
+la_ldap_default_rule_to_string( ternary_t rule ){
+  if( rule == TERN_TRUE )
+    return "ACCEPT";
+  if( rule == TERN_FALSE )
+    return "DROP";
+  return "";
+}
+
+#ifdef ENABLE_LDAPUSERCONF
+char *
+la_ldap_generate_pf_rules( ldap_profile_t *lp ){
+  char *res = NULL;
+  res = strdupf("[CLIENTS %s]\n\
+%s\n\
+[SUBNETS %s]\n\
+%s\n\
+[END]\n",
+      la_ldap_default_rule_to_string( lp->pf_client_default_accept ),
+      lp->pf_client_rules ? lp->pf_client_rules : "",
+      la_ldap_default_rule_to_string( lp->pf_subnet_default_accept ),
+      lp->pf_subnet_rules ? lp->pf_subnet_rules : "" );
+  LOGDEBUG("pf_rules = %s\n", res);
+  return res;
+}
+#endif
+
+int
+la_ldap_write_to_pf_file( char *pf_file, char *value )
+{
+  int fd, rc = 0;
+  if( pf_file == NULL ){
+    LOGERROR( "pf_file is null\n");
+    return 1;
+  }
+
+  fd = open( pf_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU );
+  if( fd == -1 ){
+    LOGERROR( "Could not open file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+    return 1;
+  }
+  rc = write( fd, value, strlen(value) );
+  if( rc == -1 ){
+    LOGERROR( "Could not write value %s to  file %s: (%d) %s\n", value, pf_file, errno, strerror( errno ) );
+    rc = 1;
+  }else if( rc !=strlen(value) ){
+    LOGERROR( "Could not write all of  %s to file %s\n", value, pf_file );
+    rc = 1;
+  }else{
+    rc = 0;
+  }
+  if( close( fd ) != 0 ){
+    LOGERROR( "Could not close file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+  }
+  return rc;
+}
+
+
+/**
+ * la_ldap_handle_pf_file
+ * Given the plugin config and the client_context
+ * will write to pf_file the right
+ */
+int
+la_ldap_handle_pf_file(config_t *c, client_context_t *cc, char *pf_file){
+  profile_config_t *p = cc->profile;
+  int rc = 0;
+
+  /* check if pf is enabled */
+  LOGDEBUG("PF enable for this profile: %s\n",
+        p->enable_pf == TERN_TRUE ? "TRUE" : "FALSE" );
+  /* write to pf_file */
+  if( pf_file == NULL && config_is_pf_enabled(c) ){
+    LOGERROR("PF is enabled but environment pf_file variable is NULL.\n");
+    return 1;
+  }else if( pf_file ){
+    if( p->enable_pf == TERN_TRUE ){
+#ifdef ENABLE_LDAPUSERCONF
+      ldap_profile_t *lp = cc->ldap_account->profile;
+      /* We only write PF rules from LDAP if
+       * pf_client_default_accept and pf_subnet_default_accept
+       * are defined
+       */
+      if( lp->pf_client_default_accept != TERN_UNDEF && lp->pf_subnet_default_accept != TERN_UNDEF ){
+        char *pf_rules = NULL;
+        pf_rules = la_ldap_generate_pf_rules( lp );
+        if( pf_rules ){
+          LOGDEBUG("Using PF rules from ldap backend\n");
+          rc = la_ldap_write_to_pf_file( pf_file, pf_rules );
+          la_free( pf_rules );
+        }else{
+          LOGERROR("ldap_profile_handle_pf_file: could not generate pf_rules\n");
+          return 1;
+        }
+      }else
+#endif
+      if( p->default_pf_rules ){
+        LOGDEBUG("Using default PF rules from config\n");
+        char *rules = str_replace_all( p->default_pf_rules, "\\n", "\n" );
+        int res = la_ldap_write_to_pf_file( pf_file, rules );
+        if( rules ) la_free( rules );
+        return res;
+      }else{
+        /* set up default pf_rules */
+        /*
+         * If pf_client_default_accept or pf_subnet_default_accept
+         * is not defined, we default to openvpn standard behaviour:
+         * allow everything
+         */
+        LOGDEBUG("No PF rules found, default to accept all\n");
+        return la_ldap_write_to_pf_file( pf_file, PF_ALLOW_ALL);
+      }
+    }else{
+        /* profile has PF disabled */
+        LOGDEBUG("PF rules disabled for this profile, default to accept all\n");
+        return la_ldap_write_to_pf_file( pf_file, PF_ALLOW_ALL );
+    }
+  }
+  return rc;
+}
+
+
 /**
  * Search for a user's DN given a config profile
  * On success, return userdn (much be freed by caller)
@@ -433,10 +572,10 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
           res = OPENVPN_PLUGIN_FUNC_ERROR;
           goto la_ldap_handle_authentication_free;
         }
-        /* handle pf_rules if any, default value otherwise */
-        ldap_profile_handle_pf_file( config, client_context->profile, client_context->ldap_account->profile, auth_context->pf_file );
         /* ldap_account_dump( client_context->ldap_account ); */
 #endif
+        /* handle pf_rules if any, default value otherwise */
+        la_ldap_handle_pf_file( config, client_context, auth_context->pf_file );
 
         /* check if user belong to right groups */
         if( client_context->profile->groupdn && client_context->profile->group_search_filter && client_context->profile->member_attribute ){

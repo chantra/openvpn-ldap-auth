@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <ctype.h>  /* isspace */
 
 #define STRPRINT_IFSET(a,prefix) if(a) fprintf(stderr, "%s:\t%s\n", prefix, a);
 #define STRDUP_IFNOTSET(a,b) if(!a && b) a=strdup(b);
@@ -158,8 +159,8 @@ profile_config_free ( profile_config_t *c ){
   check_and_free( c->groupdn );
   check_and_free( c->group_search_filter );
   check_and_free( c->member_attribute );
-#ifdef ENABLE_LDAPUSERCONF
   check_and_free( c->default_pf_rules );
+#ifdef ENABLE_LDAPUSERCONF
   check_and_free( c->default_profiledn );
 #endif
 	la_free( c );
@@ -193,10 +194,10 @@ profile_config_dup( const profile_config_t *c ){
   if( c->groupdn ) nc->groupdn = strdup( c->groupdn );
   if( c->group_search_filter ) nc->group_search_filter = strdup( c->group_search_filter );
   if( c->member_attribute ) nc->member_attribute = strdup( c->member_attribute );
-#ifdef ENABLE_LDAPUSERCONF
-  if( c->default_profiledn ) nc->default_profiledn = strdup( c->default_profiledn );
   if( c->default_pf_rules ) nc->default_pf_rules = strdup( c->default_pf_rules );
   nc->enable_pf = c->enable_pf;
+#ifdef ENABLE_LDAPUSERCONF
+  if( c->default_profiledn ) nc->default_profiledn = strdup( c->default_profiledn );
 #endif
 
   return nc;
@@ -276,6 +277,12 @@ f_readline( int fd ){
 }
 
 
+char *
+skip_whitespaces( char *l ){
+  while(isspace(l[0]))
+    l++;
+  return l;
+}
 
 int
 config_parse_file( const char *filename, config_t *c ){
@@ -292,11 +299,12 @@ config_parse_file( const char *filename, config_t *c ){
 	}
   val = NULL;
 	while ( ( line = f_readline( fd ) ) ){
-    if( line[0] == '#' || line[0] == ';' ){
+    arg = skip_whitespaces( line );
+    if( arg[0] == '#' || arg[0] == ';' ){
       free(line);
       continue;
     }
-    if( !strncmp( line, "<profile>", strlen( "<profile>" ) ) ){
+    if( !strncmp( arg, "<profile>", strlen( "<profile>" ) ) ){
       in_profile = 1;
       p = profile_config_new( );
       free(line);
@@ -308,14 +316,14 @@ config_parse_file( const char *filename, config_t *c ){
       list_append( c->profiles, p );
       continue;
     }
-    if( !strncmp( line, "</profile>", strlen( "</profile>" ) ) ){
+    if( !strncmp( arg, "</profile>", strlen( "</profile>" ) ) ){
       in_profile = 0;
       STRDUP_IFNOTSET(p->search_filter, OSEARCH_FILTER);
       p = NULL;
       free(line);
       continue;
     }
-    arg = strtok( line, "=" );
+    arg = strtok( arg, "=" );
     if(arg && *arg != '\n'){
       val = strtok( NULL, "\n");
       /* global conf -> ldap */
@@ -368,13 +376,13 @@ config_parse_file( const char *filename, config_t *c ){
       }else if( !strcmp( arg, "member_attribute" ) ){
         CHECK_IF_IN_PROFILE( arg, in_profile );
         STRDUP_IFNOTSET(p->member_attribute, val );
-#ifdef ENABLE_LDAPUSERCONF
       }else if( !strcmp( arg, "enable_pf" ) ){
         CHECK_IF_IN_PROFILE( arg, in_profile );
         p->enable_pf = string_to_ternary( val );
       }else if( !strcmp( arg, "default_pf_rules" ) ){
         CHECK_IF_IN_PROFILE( arg, in_profile );
         STRDUP_IFNOTSET(p->default_pf_rules, val );
+#ifdef ENABLE_LDAPUSERCONF
       }else if( !strcmp( arg, "default_profiledn" ) ){
         CHECK_IF_IN_PROFILE( arg, in_profile );
         STRDUP_IFNOTSET(p->default_profiledn, val );
@@ -435,15 +443,15 @@ config_dump( config_t *c){
     STRPRINT_IFSET(p->group_search_filter, "\tGroup Search Filter");
     STRPRINT_IFSET(p->member_attribute,"\tMember Attribute");
     STRPRINT_IFSET(p->profiledn,"\tProfile DN");
-#ifdef ENABLE_LDAPUSERCONF
     fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(p->enable_pf));
     fprintf( stderr, "\tDefault PF rules:\t%s\n", p->default_pf_rules ? p->default_pf_rules : "Undefined" );
+#ifdef ENABLE_LDAPUSERCONF
     fprintf( stderr, "\tDefault Profile DN:\t%s\n", p->default_profiledn ? p->default_profiledn : "Undefined" );
 #endif
 
   }
 }
-#ifdef ENABLE_LDAPUSERCONF
+
 int
 config_is_pf_enabled( config_t *c ){
   int enabled = 0;
@@ -462,4 +470,3 @@ int
 config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p ){
   return p->enable_pf == TERN_TRUE; 
 }
-#endif

@@ -270,11 +270,11 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
    * Get verbosity level from environment
    */
   
-#ifdef ENABLE_LDAPUSERCONF
   /* when ldap userconf is define, we need to hook onto those callbacks */
   if( config_is_pf_enabled( context->config )){
     *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF);
   }
+#ifdef ENABLE_LDAPUSERCONF
   *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2)
                 | OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_DISCONNECT);
 #endif
@@ -405,13 +405,14 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
     return OPENVPN_PLUGIN_FUNC_DEFERRED;
     
   }
-#ifdef ENABLE_LDAPUSERCONF
   else if (type == OPENVPN_PLUGIN_ENABLE_PF){
     /* unfortunately, at this stage we dont know anything about the client
      * yet. Let assume it is enabled, we will define default somewhere
      */
     return OPENVPN_PLUGIN_FUNC_SUCCESS;
-  }else if( type == OPENVPN_PLUGIN_CLIENT_CONNECT_V2 ){
+  }
+#ifdef ENABLE_LDAPUSERCONF
+  else if( type == OPENVPN_PLUGIN_CLIENT_CONNECT_V2 ){
     /* on client connect, we return conf options through return list
      */
     client_context_t *cc = per_client_context;
