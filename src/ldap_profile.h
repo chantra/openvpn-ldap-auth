@@ -27,6 +27,7 @@
 #include "utils.h"
 #include "action.h"
 #include "la_ldap.h"
+#include "client_context.h"
 
 
 #define PF_ALLOW_ALL "[CLIENTS ACCEPT]\n[SUBNETS ACCEPT]\n[END]\n"
@@ -87,7 +88,7 @@ extern void ldap_account_dump( ldap_account_t *l );
  * returns 0 on success, non 0 otherwise
  */
 
-extern int ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, ldap_account_t *account );
+extern int ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, client_context_t *cc );
 
 /**
  * Returns a string that is suitable to pass options to openvpn

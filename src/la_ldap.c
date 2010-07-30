@@ -427,7 +427,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
           LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
 #ifdef ENABLE_LDAPUSERCONF
         /* load user settings from LDAP profile */
-        ldap_account_load_from_dn( l, ldap, userdn, client_context->ldap_account );
+        ldap_account_load_from_dn( l, ldap, userdn, client_context );
         /* check if user timeframe is allowed start_date, end_date */
         if( ldap_profile_handle_allowed_timeframe( client_context->ldap_account->profile ) != 0 ){
           res = OPENVPN_PLUGIN_FUNC_ERROR;

@@ -149,9 +149,9 @@ la_ldap_bool_to_ternary( char *value ){
   if( value == NULL )
     return TERN_UNDEF;
 
-  if( strcasecmp( value, "true" ) == 0 || strcasecmp( value, "on" ))
+  if( strcasecmp( value, "true" ) == 0 || strcasecmp( value, "on" ) == 0)
     return TERN_TRUE;
-  if( strcasecmp( value, "false" ) == 0 || strcasecmp( value, "off" ))
+  if( strcasecmp( value, "false" ) == 0 || strcasecmp( value, "off" ) == 0)
     return TERN_FALSE;
   return TERN_UNDEF;
 }
@@ -272,12 +272,13 @@ ldap_account_load_from_entry_end_loop:
  * returns 0 on success, non 0 otherwise
  */
 int
-ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, ldap_account_t *account ){
+ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, client_context_t *cc ){
   /**
    * retrieve info from user settings
    * if user has a profile, get info from that profile
    */
   struct timeval timeout;
+  ldap_account_t *account = cc->ldap_account;
   char *attrs[] = { NULL };
   LDAPMessage *e, *result;
   config_t *config = NULL;
@@ -343,12 +344,15 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, l
       ldap_value_free_len( vals );
 
       if( account->profile_dn ){
-        ldap_account_load_from_dn( ldap_context, ldap, account->profile_dn, account );
+        ldap_account_load_from_dn( ldap_context, ldap, account->profile_dn, cc );
       }
     }else{
       /* reset ld_errno */
       int ec = LDAP_SUCCESS;
       ldap_set_option( ldap, LDAP_OPT_ERROR_NUMBER, &ec );
+      if( cc->profile->default_profiledn ){
+        ldap_account_load_from_dn( ldap_context, ldap, cc->profile->default_profiledn, cc );
+      }
     }
   }
   ldap_account_load_from_entry( ldap, e, account );
