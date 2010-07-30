@@ -500,6 +500,11 @@ ldap_profile_handle_pf_file(config_t *c, profile_config_t *p, ldap_profile_t *lp
           LOGERROR("ldap_profile_handle_pf_file: could not generate pf_rules\n");
           return 1;
         }
+      }else if( p->default_pf_rules ){
+        char *rules = str_replace_all( p->default_pf_rules, "\\n", "\n" );
+        int res = ldap_profile_write_to_pf_file( pf_file, rules );
+        if( rules ) la_free( rules );
+        return res;
       }else{
         /* set up default pf_rules */
         /*

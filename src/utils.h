@@ -50,6 +50,7 @@ extern char *strcatf( char *dest, const char *fmt, ...);
  * The caller is responsible for freeing this new string.
  */
 extern char *str_replace( const char *string, const char *substr, const char *replacement );
+extern char *str_replace_all( const char *string, const char *substr, const char *replacement );
 /*
  * Reads a password from stdin, the password is not echoed
  * to stdout
