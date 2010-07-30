@@ -382,7 +382,7 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle, const int type, const ch
     if( username ){
       /* check if we have the redirect_gateway_prefix set
           and if it matches user */
-      if( config->redirect_gateway_prefix 
+      if( config->redirect_gateway_prefix
           && strncmp( config->redirect_gateway_prefix, username, strlen( config->redirect_gateway_prefix ) ) == 0 ){
         auth_context->username = strdup( username + strlen( config->redirect_gateway_prefix ) );
       }else{
