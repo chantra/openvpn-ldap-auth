@@ -157,8 +157,8 @@ ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char
   /* initialise timeout values */
   la_ldap_set_timeout( config, &timeout );
 
-  if( username && config->profile->search_filter ){
-    search_filter = str_replace(config->profile->search_filter, "%u", username );
+  if( username && p->search_filter ){
+    search_filter = str_replace(p->search_filter, "%u", username );
   }
   if( DODEBUG( ldap_context->verb ) )
     LOGINFO( "Searching user using filter %s with basedn: %s and scope %s\n", search_filter, p->basedn, la_ldap_ldap_scope_to_string( p->search_scope ) );
@@ -225,15 +225,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, 
 
   config = ldap_context->config;
 
-  if( list_length( config->profiles ) == 0 ){
-    p = config->profile;
-    userdn = ldap_find_user_for_profile( ldap, ldap_context, username, p );
-    if( userdn ){
-      if( cc->user_dn ) la_free( cc->user_dn );
-      cc->user_dn = strdup( userdn );
-      cc->profile = p;
-    }
-  }else{
+  if( list_length( config->profiles ) != 0 ){
     for( item = list_first( config->profiles ); item; item = item->next ){
       p = item->data;
       userdn = ldap_find_user_for_profile( ldap, ldap_context, username, p );
@@ -244,6 +236,8 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, 
         break;
       }
     }
+  }else{
+    LOGERROR("No profiles defined. Please make sure you have a <profile></profile> section in your config.\n");
   }
 
   return userdn;

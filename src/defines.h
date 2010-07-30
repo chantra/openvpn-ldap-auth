@@ -23,7 +23,6 @@
 #define OURI						"ldap://localhost"
 #define OLDAP_VERSION  3
 
-#define OBASEDN				"ou=users,dc=example,dc=com"
 //#define OBINDDN        NULL
 //#define OBINDPW        NULL
 #define OSEARCH_FILTER	"(uid=%u)"

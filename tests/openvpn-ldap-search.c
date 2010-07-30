@@ -41,7 +41,7 @@ int debug = 0;
 void usage( char *prog ){
 	char *prg = strdup( prog );
 	char *name = basename( prog );
-	fprintf( stderr, "USAGE: %s [-h] [-d] [-c configfile] [-D binddn] [-H ldap_uri] [-Z] [-f search_filter]\n\
+	fprintf( stderr, "USAGE: %s [-h] [-d] [-c configfile] [-D binddn] [-H ldap_uri] [-Z]\n\
 \t-h:\tprint this help\n\
 \t-c:\tconfig file\n\
 \t-f:\tsearch filter\n\
@@ -68,7 +68,7 @@ main( int argc, char **argv){
 
   config = config_new( );
 
-	while ( ( rc = getopt ( argc, argv, ":H:D:c:b:f:WZhdv" ) ) != - 1 ){
+	while ( ( rc = getopt ( argc, argv, ":H:D:c:WZhdv" ) ) != - 1 ){
 		switch( rc ) {
 			case 'h':
 				usage( argv[0] );
@@ -76,12 +76,6 @@ main( int argc, char **argv){
 			case 'H':
 				config->ldap->uri = strdup(optarg);
 				break;
-      case 'b':
-        config->profile->basedn = strdup(optarg);
-        break;
-      case 'f':
-        config->profile->search_filter = strdup(optarg);
-        break;
 			case 'Z':
 				config->ldap->ssl = strdup("start_tls");
 				break;
@@ -180,42 +174,45 @@ main( int argc, char **argv){
 	BerElement   *ber;
 	struct berval **vals;
   char          *dn;
-  if( username && config->profile->search_filter ){
-    filter = str_replace(config->profile->search_filter, "%u", username );
-  }
-  printdebug("search Filter %s\nFinal filter: %s\n",config->profile->search_filter, filter);
-	rc = ldap_search_ext_s( ldap, config->profile->basedn, LDAP_SCOPE_ONELEVEL, filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
-	if( rc == LDAP_SUCCESS ){
-		fprintf(stdout, "Search returned success\n");
-		e = ldap_first_entry( ldap, result );
-    if ( e != NULL ) {
-      do{
-        dn = ldap_get_dn( ldap, e );
-        fprintf( stdout, "DN: %s\n", dn );
-        for ( a = ldap_first_attribute( ldap, e, &ber );
-                a != NULL; a = ldap_next_attribute( ldap, e, ber ) ) {
-          if ((vals = ldap_get_values_len( ldap, e, a)) != NULL ) {
-            for ( i = 0; vals[i] != NULL; i++ ) {
-              printf( "%s: %s\n", a, vals[i]->bv_val );
-            }
-            ldap_value_free_len( vals );
-          }
-          ldap_memfree( a );
-        }
-        if ( dn != NULL ){
-          ldap_memfree( dn );
-        }
-        if ( ber != NULL ) {
-          ber_free( ber, 0 );
-        }
-      }while( ( e = ldap_next_entry( ldap, e ) ) );
+  list_item_t *item;
+  for( item = list_first( config->profiles ); item; item = item->next ){
+    profile_config_t *p = item->data;
+    if( username && p->search_filter ){
+      filter = str_replace(p->search_filter, "%u", username );
     }
-    ldap_msgfree( result );
-
-	}else{
-		WARN( "Search returned error: %s", ldap_err2string( rc ) );
-		goto exit;
-	}
+    printdebug("search Filter %s\nFinal filter: %s\n",p->search_filter, filter);
+    rc = ldap_search_ext_s( ldap, p->basedn, LDAP_SCOPE_ONELEVEL, filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
+    if( rc == LDAP_SUCCESS ){
+      fprintf(stdout, "Search returned success\n");
+      e = ldap_first_entry( ldap, result );
+      if ( e != NULL ) {
+        do{
+          dn = ldap_get_dn( ldap, e );
+          fprintf( stdout, "DN: %s\n", dn );
+          for ( a = ldap_first_attribute( ldap, e, &ber );
+                  a != NULL; a = ldap_next_attribute( ldap, e, ber ) ) {
+            if ((vals = ldap_get_values_len( ldap, e, a)) != NULL ) {
+              for ( i = 0; vals[i] != NULL; i++ ) {
+                printf( "%s: %s\n", a, vals[i]->bv_val );
+              }
+              ldap_value_free_len( vals );
+            }
+            ldap_memfree( a );
+          }
+          if ( dn != NULL ){
+            ldap_memfree( dn );
+          }
+          if ( ber != NULL ) {
+            ber_free( ber, 0 );
+          }
+        }while( ( e = ldap_next_entry( ldap, e ) ) );
+      }
+      ldap_msgfree( result );
+      if( filter ) free( filter );
+	  }else{
+      WARN( "Search returned error: %s", ldap_err2string( rc ) );
+    }
+  }
 #if 0
 	rc = ldap_compare_ext_s( ldap, bind_user, "givenname", &bv, NULL, NULL );
 	if( rc == LDAP_COMPARE_TRUE){
@@ -223,10 +220,10 @@ main( int argc, char **argv){
 	}
 #endif
 exit:
-  if( filter ) free( filter );
   config_free( config );
-	rc = ldap_unbind_ext_s( ldap, NULL, NULL );
-	fprintf(stdout, "Unbind returned: %d\n", rc );
+  rc = ldap_unbind_ext_s( ldap, NULL, NULL );
+  fprintf(stdout, "Unbind returned: %d\n", rc );
+
 	return 0;
 }
 

@@ -34,6 +34,12 @@
 
 #define STRPRINT_IFSET(a,prefix) if(a) fprintf(stderr, "%s:\t%s\n", prefix, a);
 #define STRDUP_IFNOTSET(a,b) if(!a && b) a=strdup(b);
+#define CHECK_IF_IN_PROFILE(a,b) if(!b){ \
+LOGWARNING("%s is not defined within <profile></profile>. It will be ignored\n", a);\
+free( line );\
+continue;\
+}
+
 //#define STRDUP_IFNOTSET_NOTNULL(a, b) if( b ) STRDUP_IFNOTSET(a,b)
 
 void check_and_free( void *d ){
@@ -45,9 +51,6 @@ config_set_default( config_t *c){
 #ifdef OURI
   if(OURI) STRDUP_IFNOTSET(c->ldap->uri, OURI );
 #endif
-#ifdef OBASEDN
-  STRDUP_IFNOTSET(c->profile->basedn, OBASEDN );
-#endif
 #ifdef OBINDDN
   STRDUP_IFNOTSET(c->ldap->binddn, OBINDDN );
 #endif
@@ -55,9 +58,6 @@ config_set_default( config_t *c){
   STRDUP_IFNOTSET(c->ldap->bindpw, OBINDPW);
 #endif
   if(!c->ldap->ldap_version) c->ldap->ldap_version =  OLDAP_VERSION;
-#ifdef OSEARCH_FILTER
-  STRDUP_IFNOTSET(c->profile->search_filter, OSEARCH_FILTER );
-#endif
 #ifdef OSSL
   STRDUP_IFNOTSET(c->ldap->ssl, OSSL );
 #endif
@@ -158,6 +158,10 @@ profile_config_free ( profile_config_t *c ){
   check_and_free( c->groupdn );
   check_and_free( c->group_search_filter );
   check_and_free( c->member_attribute );
+#ifdef ENABLE_LDAPUSERCONF
+  check_and_free( c->default_pf_rules );
+  check_and_free( c->default_profiledn );
+#endif
 	la_free( c );
 }
 
@@ -166,6 +170,7 @@ profile_config_list_free_cb( void *data ){
   profile_config_t *c = data;
   profile_config_free( c );
 }
+
 profile_config_t *
 profile_config_new ( void ){
   profile_config_t *c = la_malloc( sizeof( profile_config_t ) );
@@ -188,7 +193,11 @@ profile_config_dup( const profile_config_t *c ){
   if( c->groupdn ) nc->groupdn = strdup( c->groupdn );
   if( c->group_search_filter ) nc->group_search_filter = strdup( c->group_search_filter );
   if( c->member_attribute ) nc->member_attribute = strdup( c->member_attribute );
+#ifdef ENABLE_LDAPUSERCONF
+  if( c->default_profiledn ) nc->default_profiledn = strdup( c->default_profiledn );
+  if( c->default_pf_rules ) nc->default_pf_rules = strdup( c->default_pf_rules );
   nc->enable_pf = c->enable_pf;
+#endif
 
   return nc;
 }
@@ -203,10 +212,9 @@ config_new( void ){
 	memset( c, 0, sizeof( config_t ) );
 
   c->ldap = ldap_config_new( );
-  c->profile = profile_config_new( );
   c->profiles = list_new( );
 
-  if( !(c->profiles && c->profile && c->ldap) ){
+  if( !(c->profiles && c->ldap) ){
     config_free( c );
     return NULL;
   }
@@ -218,16 +226,17 @@ config_dup( config_t *c ){
   config_t *nc = NULL;
   profile_config_t *pgc = NULL;
   list_item_t *item = NULL;
+  ldap_config_t *l = NULL;
 
   if( !c ) return NULL;
   nc = config_new( );
   if( !nc ) return NULL;
+  /* ldap */
+  l = ldap_config_dup( c->ldap );
+  ldap_config_free( nc->ldap );
+  nc->ldap = l;
 
-  pgc = profile_config_dup( c->profile );
-
-  profile_config_free( nc->profile );
-  nc->profile = pgc;
-
+  /* profiles */
   for( item = list_first(c->profiles); item; item = item->next ){
     pgc = profile_config_dup( item->data );
     list_append( nc->profiles, pgc );
@@ -240,7 +249,6 @@ config_dup( config_t *c ){
 void
 config_free( config_t *c ){
 	if( !c ) return;
-  profile_config_free( c->profile );
   ldap_config_free( c->ldap );
   list_free( c->profiles, profile_config_list_free_cb );
   la_free( c );
@@ -302,11 +310,11 @@ config_parse_file( const char *filename, config_t *c ){
     }
     if( !strncmp( line, "</profile>", strlen( "</profile>" ) ) ){
       in_profile = 0;
+      STRDUP_IFNOTSET(p->search_filter, OSEARCH_FILTER);
       p = NULL;
       free(line);
       continue;
     }
-    profile_config_t *current_profile = in_profile ? p : c->profile;
     arg = strtok( line, "=" );
     if(arg && *arg != '\n'){
       val = strtok( NULL, "\n");
@@ -335,27 +343,42 @@ config_parse_file( const char *filename, config_t *c ){
         STRDUP_IFNOTSET(c->ldap->tls_reqcert, val );
       }else if( !strcmp( arg, "timeout" ) ){
         if( !c->ldap->timeout ) c->ldap->timeout = atoi(val);
-      /* global conf */
-      }else if( !strcmp( arg, "enable_pf" ) ){
-        current_profile->enable_pf = !(strcasecmp( val, "true") && strcasecmp( val, "on" ) && strcasecmp( val, "1")) ? TERN_TRUE : TERN_FALSE;
+      /* profile conf */
       }else if ( !strcmp( arg, "basedn" ) ){
-        STRDUP_IFNOTSET(current_profile->basedn, val );
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->basedn, val );
       }else if ( !strcmp( arg, "search_filter" ) ){
-        STRDUP_IFNOTSET(current_profile->search_filter, val );
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->search_filter, val );
       }else if ( !strcmp( arg, "search_scope" ) ){
+        CHECK_IF_IN_PROFILE( arg, in_profile );
         if( !strcasecmp( val, "LDAP_SCOPE_BASE" ) ){
-          current_profile->search_scope = LA_SCOPE_BASE;
+          p->search_scope = LA_SCOPE_BASE;
         }else if( !strcasecmp( val, "LDAP_SCOPE_ONELEVEL" ) ){
-          current_profile->search_scope = LA_SCOPE_ONELEVEL;
+          p->search_scope = LA_SCOPE_ONELEVEL;
         }else if( !strcasecmp( val, "LDAP_SCOPE_SUBTREE" ) ){
-          current_profile->search_scope = LA_SCOPE_SUBTREE;
+          p->search_scope = LA_SCOPE_SUBTREE;
         }
       }else if( !strcmp( arg, "groupdn" ) ){
-        STRDUP_IFNOTSET(current_profile->groupdn, val );
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->groupdn, val );
       }else if( !strcmp( arg, "group_search_filter" ) ){
-        STRDUP_IFNOTSET(current_profile->group_search_filter, val );
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->group_search_filter, val );
       }else if( !strcmp( arg, "member_attribute" ) ){
-        STRDUP_IFNOTSET(current_profile->member_attribute, val );
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->member_attribute, val );
+#ifdef ENABLE_LDAPUSERCONF
+      }else if( !strcmp( arg, "enable_pf" ) ){
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        p->enable_pf = string_to_ternary( val );
+      }else if( !strcmp( arg, "default_pf_rules" ) ){
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->default_pf_rules, val );
+      }else if( !strcmp( arg, "default_profiledn" ) ){
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->default_profiledn, val );
+#endif
       }else{
         LOGWARNING("Unrecognized option *%s=%s*\n", arg, val);
       }
@@ -388,6 +411,7 @@ config_dump( config_t *c){
   fprintf( stderr, "\tSSL:\t%s\n", c->ldap->ssl );
   fprintf( stderr, "\tLDAP VERSION:\t%d\n", c->ldap->ldap_version );
   fprintf( stderr, "\tLDAP TIMEOUT:\t%d\n", c->ldap->timeout );
+#if 0
   fprintf( stderr, "*Default Profile:*\n" );
   STRPRINT_IFSET(c->profile->basedn, "\tBaseDN");
   fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(c->profile->enable_pf));
@@ -397,6 +421,7 @@ config_dump( config_t *c){
   STRPRINT_IFSET(c->profile->group_search_filter, "\tGroup Search Filter");
   STRPRINT_IFSET(c->profile->member_attribute,"\tMember Attribute");
   STRPRINT_IFSET(c->profile->profiledn,"\tProfile DN");
+#endif
   /* Dump each profiles */
   list_item_t *item;
   profile_config_t *p;
@@ -404,13 +429,17 @@ config_dump( config_t *c){
     p = item->data;
     fprintf( stderr, "*Custom Profile:*\n" );
     STRPRINT_IFSET(p->basedn, "\tBaseDN");
-    fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(p->enable_pf));
     fprintf( stderr, "\tSearch Scope:\t%s\n", config_search_scope_to_string( p->search_scope ) );
     fprintf( stderr, "\tSearch filter:\t%s\n", p->search_filter );
     STRPRINT_IFSET(p->groupdn,"\tGroupDN");
     STRPRINT_IFSET(p->group_search_filter, "\tGroup Search Filter");
     STRPRINT_IFSET(p->member_attribute,"\tMember Attribute");
     STRPRINT_IFSET(p->profiledn,"\tProfile DN");
+#ifdef ENABLE_LDAPUSERCONF
+    fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(p->enable_pf));
+    fprintf( stderr, "\tDefault PF rules:\t%s\n", p->default_pf_rules ? p->default_pf_rules : "Undefined" );
+    fprintf( stderr, "\tDefault Profile DN:\t%s\n", p->default_profiledn ? p->default_profiledn : "Undefined" );
+#endif
 
   }
 }
@@ -419,8 +448,6 @@ int
 config_is_pf_enabled( config_t *c ){
   int enabled = 0;
   list_item_t *item;
-  if( c->profile->enable_pf == TERN_TRUE )
-    return 1;
 
   for( item = list_first( c->profiles ); item; item = item->next ){
     profile_config_t *pc = item->data;
@@ -433,7 +460,5 @@ config_is_pf_enabled( config_t *c ){
 }
 int
 config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p ){
-  return (c->profile->enable_pf != TERN_TRUE && p->enable_pf == TERN_TRUE)
-              ||
-            ( c->profile->enable_pf == TERN_TRUE && p->enable_pf != TERN_FALSE); 
+  return p->enable_pf == TERN_TRUE; 
 }

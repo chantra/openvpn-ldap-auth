@@ -478,16 +478,14 @@ int
 ldap_profile_handle_pf_file(config_t *c, profile_config_t *p, ldap_profile_t *lp, char *pf_file){
   int rc = 0;
   /* check if pf is enabled */
-  LOGDEBUG("Global:%s\tProfile:%s\tPF enable for this profile: %s\n",
-        ternary_to_string(c->profile->enable_pf),
-        ternary_to_string(p->enable_pf),
-        config_is_pf_enabled_for_profile( c, p) ? "TRUE" : "FALSE" );
+  LOGDEBUG("PF enable for this profile: %s\n",
+        p->enable_pf == TERN_TRUE ? "TRUE" : "FALSE" );
   /* write to pf_file */
   if( pf_file == NULL && config_is_pf_enabled(c) ){
     LOGERROR("PF is enabled but environment pf_file variable is NULL.\n");
     return 1;
   }else if( pf_file ){
-    if( config_is_pf_enabled_for_profile( c, p) ){
+    if( p->enable_pf == TERN_TRUE ){
       /* We only write PF rules from LDAP if
        * pf_client_default_accept and pf_subnet_default_accept
        * are defined

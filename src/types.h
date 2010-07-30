@@ -30,6 +30,7 @@ typedef enum ternary {
 } ternary_t;
 
 #define ternary_to_string(x) x == TERN_FALSE ? "False" : x == TERN_UNDEF ? "Undef" : "True"
+#define string_to_ternary(x) strcasecmp(x,"true") || strcasecmp(x,"on") || strcasecmp(x,"1") ? TERN_TRUE : TERN_FALSE
 /* bool definitions */
 #ifndef bool
 #define bool int

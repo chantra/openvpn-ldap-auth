@@ -224,16 +224,10 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
    */
   *type_mask = OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY);
 
-   while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:b:f:t:WZ" ) ) != - 1 ){
+   while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:t:WZ" ) ) != - 1 ){
     switch( rc ) {
       case 'H':
         context->config->ldap->uri = strdup(optarg);
-        break;
-      case 'b':
-        context->config->profile->basedn = strdup(optarg);
-        break;
-      case 'f':
-        context->config->profile->search_filter = strdup(optarg);
         break;
       case 'Z':
         context->config->ldap->ssl = strdup("start_tls");

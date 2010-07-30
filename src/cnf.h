@@ -24,6 +24,7 @@
 
 #include "list.h"
 #include "types.h"
+#include "config.h"
 
 
 typedef enum ldap_search_scope{
@@ -66,7 +67,12 @@ typedef struct profile_config{
   char        *group_search_filter;
   char        *member_attribute;
   char        *profiledn;
-  ternary_t enable_pf;
+#ifdef ENABLE_LDAPUSERCONF
+  /* packet filtering */
+  ternary_t    enable_pf;
+  char        *default_pf_rules;
+  char        *default_profiledn;
+#endif
 } profile_config_t;
 
 /**
@@ -75,7 +81,6 @@ typedef struct profile_config{
  */
 typedef struct config{
   ldap_config_t    *ldap;
-  profile_config_t  *profile;
   list_t    *profiles;
 } config_t;
 
