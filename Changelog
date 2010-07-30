@@ -1,3 +1,7 @@
+version 0.0.5 2010-07-31
+	* Fixes potential memleak where search result was not freed
+	* add search_filter to documentation
+
 version 0.0.4 2010-07-19
 	* Only one thread is handling authentication
 

@@ -1,6 +1,6 @@
 m4_define([openvpnldapauth_version_major],[0])
 m4_define([openvpnldapauth_version_minor],[0])
-m4_define([openvpnldapauth_version_micro],[4])
+m4_define([openvpnldapauth_version_micro],[5])
 m4_define([openvpnldapauth_version_extra],[])
 m4_define([openvpnldapauth_version],[openvpnldapauth_version_major().openvpnldapauth_version_minor().openvpnldapauth_version_micro()openvpnldapauth_version_extra()])
 
