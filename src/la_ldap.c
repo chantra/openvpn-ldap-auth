@@ -94,7 +94,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
   struct timeval timeout;
   char *attrs[] = { NULL };
   char          *dn = NULL;
-  LDAPMessage *e, *result;
+  LDAPMessage *e, *result = NULL;
   config_t *config = NULL;
   char *search_filter = NULL;
   int rc;
@@ -106,7 +106,6 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username )
     return NULL;
   }
 
-  result = NULL;
   config = ldap_context->config;
   
   /* initialise timeout values */
@@ -237,7 +236,7 @@ int
 ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, char *userdn ){
   struct timeval timeout;
   char *attrs[] = { NULL };
-  LDAPMessage *result;
+  LDAPMessage *result = NULL;
   config_t *config = NULL;
   char *search_filter = NULL;
   int rc;
