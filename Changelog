@@ -1,3 +1,6 @@
+version 0.0.6 2010-08-03
+	* Handle *version* argument correctly
+
 version 0.0.5 2010-07-31
 	* Fixes potential memleak where search result was not freed
 	* add search_filter to documentation
