@@ -197,7 +197,7 @@ config_parse_file( const char *filename, config_t *c ){
         STRDUP_IFNOTSET(c->bindpw, val );
       }else if ( !strcmp( arg, "basedn" ) ){
         STRDUP_IFNOTSET(c->basedn, val );
-      }else if ( !strcmp( arg, "ldap_version" ) ){
+      }else if ( !strcmp( arg, "version" ) ){
         if(!c->ldap_version) c->ldap_version = atoi(val);
       }else if ( !strcmp( arg, "search_filter" ) ){
         STRDUP_IFNOTSET(c->search_filter, val );
