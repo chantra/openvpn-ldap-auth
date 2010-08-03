@@ -58,6 +58,7 @@
 #include "ldap_profile.h"
 
 #define DODEBUG(verb) ((verb) >= 4)
+#define DFT_REDIRECT_GATEWAY_FLAGS "def1 bypass-dhcp"
 
 pthread_mutex_t    action_mutex;
 pthread_cond_t     action_cond;
@@ -277,6 +278,10 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
 #ifdef ENABLE_LDAPUSERCONF
   *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2)
                 | OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_DISCONNECT);
+#else
+  if( config_is_redirect_gw_enabled( context->config ) ){
+    *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2);
+  }
 #endif
 
   const char *verb_string = get_env ("verb", envp);
@@ -410,14 +415,35 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
      * yet. Let assume it is enabled, we will define default somewhere
      */
     return OPENVPN_PLUGIN_FUNC_SUCCESS;
-  }
-#ifdef ENABLE_LDAPUSERCONF
-  else if( type == OPENVPN_PLUGIN_CLIENT_CONNECT_V2 ){
+  }else if( type == OPENVPN_PLUGIN_CLIENT_CONNECT_V2 ){
     /* on client connect, we return conf options through return list
      */
+    const char *username = get_env ("username", envp);
     client_context_t *cc = per_client_context;
+    char *ccd_options = NULL;
+    /* sanity check */
+    if (!username){
+      LOGERROR("No username supplied to OpenVPN plugin");
+      return OPENVPN_PLUGIN_FUNC_ERROR;
+    }
+    if (!cc || !cc->profile){
+      LOGERROR("No profile found for user\n");
+      return OPENVPN_PLUGIN_FUNC_ERROR;
+    }
+#ifdef ENABLE_LDAPUSERCONF
     ldap_account_t *a = cc->ldap_account;
-    char *ccd_options = ldap_account_get_options_to_string( cc->ldap_account );
+    ccd_options = ldap_account_get_options_to_string( cc->ldap_account );
+#endif
+    if( cc->profile->redirect_gateway_prefix && strlen( cc->profile->redirect_gateway_prefix ) > 0 ){
+      /* do the username start with prefix? */
+      if( strncmp( cc->profile->redirect_gateway_prefix, username, strlen( cc->profile->redirect_gateway_prefix ) ) == 0 ){
+        char *tmp_ccd = ccd_options;
+        ccd_options = strdupf("push \"redirect-gateway %s\"\n%s",
+                            cc->profile->redirect_gateway_flags ? cc->profile->redirect_gateway_flags : DFT_REDIRECT_GATEWAY_FLAGS,
+                            tmp_ccd ? tmp_ccd : ""); 
+        if( tmp_ccd ) la_free( tmp_ccd );
+      }
+    }
     if( ccd_options ){
       *return_list = la_malloc( sizeof( struct openvpn_plugin_string_list ) );
       if( *return_list != NULL){
@@ -427,7 +453,9 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
       }
     }
     return OPENVPN_PLUGIN_FUNC_SUCCESS;
-  }else if( type == OPENVPN_PLUGIN_CLIENT_DISCONNECT ){
+  }
+#ifdef ENABLE_LDAPUSERCONF
+  else if( type == OPENVPN_PLUGIN_CLIENT_DISCONNECT ){
     /* nothing done for now
      * potentially, session could be logged
      */

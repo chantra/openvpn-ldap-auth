@@ -280,6 +280,7 @@ la_ldap_handle_pf_file(config_t *c, client_context_t *cc, char *pf_file){
 char *
 ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char *username, profile_config_t *p){
   char *userdn = NULL;
+  char *real_username = NULL;
   struct timeval timeout;
   char *attrs[] = { NULL };
   char          *dn = NULL;
@@ -295,9 +296,17 @@ ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char
   /* initialise timeout values */
   la_ldap_set_timeout( config, &timeout );
 
-  if( username && p->search_filter ){
-    search_filter = str_replace(p->search_filter, "%u", username );
+  if( p->redirect_gateway_prefix
+      && strncmp(  p->redirect_gateway_prefix, username, strlen( p->redirect_gateway_prefix ) ) == 0 ){
+    real_username = strdup( username + strlen( p->redirect_gateway_prefix ) );
+  }else{
+    real_username = strdup( username );
   }
+  if( real_username && p->search_filter ){
+    search_filter = str_replace(p->search_filter, "%u", real_username );
+  }
+  if( real_username ) la_free( real_username );
+
   if( DODEBUG( ldap_context->verb ) )
     LOGINFO( "Searching user using filter %s with basedn: %s and scope %s\n", search_filter, p->basedn, la_ldap_ldap_scope_to_string( p->search_scope ) );
   ldap_scope = la_ldap_config_search_scope_to_ldap( p->search_scope );

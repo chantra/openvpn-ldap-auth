@@ -135,6 +135,7 @@ int main(int argc, const char *argv[]) {
       printf("client-connect failed!\n");
     } else {
       printf("client-connect succeed!\n");
+      printf("Config returned by plugin: %s\n", return_list ? return_list->value : "Nothing");
     }
 
     struct openvpn_plugin_string_list *rl, *next;
@@ -145,6 +146,7 @@ int main(int argc, const char *argv[]) {
       rl = next;
       next = next->next;
       free( rl );
+      rl = NULL;
     }
     /* Client Disconnect */
     err = openvpn_plugin_func_v2(handle, OPENVPN_PLUGIN_CLIENT_DISCONNECT, argv, envp, client_contexts[i], NULL);

@@ -115,7 +115,7 @@ main( int argc, char **argv){
 		return 1;
 	}
 	
-	rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap->ldap_version));
+	rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap->version));
 	if( rc != LDAP_OPT_SUCCESS ){
 		ERROR( "ERROR: ldap_set_option returned (%d) \"%s\"\n", rc, ldap_err2string(rc) );
 		return 1;

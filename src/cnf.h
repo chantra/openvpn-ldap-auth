@@ -66,7 +66,9 @@ typedef struct profile_config{
   char        *groupdn;
   char        *group_search_filter;
   char        *member_attribute;
-  char        *profiledn;
+  /* default gw hack */
+  char        *redirect_gateway_prefix;
+  char        *redirect_gateway_flags;
   /* packet filtering */
   ternary_t    enable_pf;
   char        *default_pf_rules;
@@ -93,5 +95,7 @@ extern void config_free( config_t *c );
 extern void config_dump( config_t *c );
 extern void config_set_default( config_t *c );
 extern int config_is_pf_enabled( config_t *c );
-extern int config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p );
+extern int config_is_pf_enabled_for_profile( profile_config_t *p );
+extern int config_is_redirect_gw_enabled( config_t *c );
+extern int config_is_redirect_gw_enabled_for_profile( profile_config_t *p );
 #endif /* _CNF_H_ */

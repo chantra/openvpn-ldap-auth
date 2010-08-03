@@ -83,15 +83,6 @@ config_set_default( config_t *c){
 #ifdef OTIMEOUT
   if( !c->ldap->timeout ) c->ldap->timeout = OTIMEOUT;
 #endif
-#ifdef OGROUPDN
-  STRDUP_IFNOTSET(c->profile->groupdn, OGROUPDN );
-#endif
-#ifdef OGROUP_SEARCH_FILTER
-  STRDUP_IFNOTSET(c->profile->group_search_filter, OGROUP_SEARCH_FILTER );
-#endif
-#ifdef OMEMBER_ATRIBUTE
-  STRDUP_IFNOTSET(c->profile->member_attribute, OMEMBER_ATRIBUTE );
-#endif
 
 }
 
@@ -160,6 +151,9 @@ profile_config_free ( profile_config_t *c ){
   check_and_free( c->group_search_filter );
   check_and_free( c->member_attribute );
   check_and_free( c->default_pf_rules );
+  /* redirect gateway */
+  check_and_free( c->redirect_gateway_prefix );
+  check_and_free( c->redirect_gateway_flags );
 #ifdef ENABLE_LDAPUSERCONF
   check_and_free( c->default_profiledn );
 #endif
@@ -191,11 +185,16 @@ profile_config_dup( const profile_config_t *c ){
   if( c->basedn ) nc->basedn = strdup( c->basedn );
   if( c->search_filter ) nc->search_filter = strdup( c->search_filter );
   nc->search_scope = c->search_scope;
+  /* Group */
   if( c->groupdn ) nc->groupdn = strdup( c->groupdn );
   if( c->group_search_filter ) nc->group_search_filter = strdup( c->group_search_filter );
   if( c->member_attribute ) nc->member_attribute = strdup( c->member_attribute );
+  /* PF */
   if( c->default_pf_rules ) nc->default_pf_rules = strdup( c->default_pf_rules );
   nc->enable_pf = c->enable_pf;
+  /* default gw */
+  if( c->redirect_gateway_prefix ) nc->redirect_gateway_prefix = strdup( c->redirect_gateway_prefix );
+  if( c->redirect_gateway_flags ) nc->redirect_gateway_flags = strdup( c->redirect_gateway_flags );
 #ifdef ENABLE_LDAPUSERCONF
   if( c->default_profiledn ) nc->default_profiledn = strdup( c->default_profiledn );
 #endif
@@ -367,6 +366,7 @@ config_parse_file( const char *filename, config_t *c ){
         }else if( !strcasecmp( val, "LDAP_SCOPE_SUBTREE" ) ){
           p->search_scope = LA_SCOPE_SUBTREE;
         }
+      /* Group */
       }else if( !strcmp( arg, "groupdn" ) ){
         CHECK_IF_IN_PROFILE( arg, in_profile );
         STRDUP_IFNOTSET(p->groupdn, val );
@@ -376,6 +376,14 @@ config_parse_file( const char *filename, config_t *c ){
       }else if( !strcmp( arg, "member_attribute" ) ){
         CHECK_IF_IN_PROFILE( arg, in_profile );
         STRDUP_IFNOTSET(p->member_attribute, val );
+      /* Default GW */
+      }else if( !strcmp( arg, "redirect_gateway_prefix" ) ){
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->redirect_gateway_prefix, val );
+      }else if( !strcmp( arg, "redirect_gateway_flags" ) ){
+        CHECK_IF_IN_PROFILE( arg, in_profile );
+        STRDUP_IFNOTSET(p->redirect_gateway_flags, val );
+      /* PF */
       }else if( !strcmp( arg, "enable_pf" ) ){
         CHECK_IF_IN_PROFILE( arg, in_profile );
         p->enable_pf = string_to_ternary( val );
@@ -419,17 +427,6 @@ config_dump( config_t *c){
   fprintf( stderr, "\tSSL:\t%s\n", c->ldap->ssl );
   fprintf( stderr, "\tLDAP VERSION:\t%d\n", c->ldap->version );
   fprintf( stderr, "\tLDAP TIMEOUT:\t%d\n", c->ldap->timeout );
-#if 0
-  fprintf( stderr, "*Default Profile:*\n" );
-  STRPRINT_IFSET(c->profile->basedn, "\tBaseDN");
-  fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(c->profile->enable_pf));
-  fprintf( stderr, "\tSearch Scope:\t%s\n", config_search_scope_to_string( c->profile->search_scope ) );
-  fprintf( stderr, "\tSearch filter:\t%s\n", c->profile->search_filter );
-  STRPRINT_IFSET(c->profile->groupdn,"\tGroupDN");
-  STRPRINT_IFSET(c->profile->group_search_filter, "\tGroup Search Filter");
-  STRPRINT_IFSET(c->profile->member_attribute,"\tMember Attribute");
-  STRPRINT_IFSET(c->profile->profiledn,"\tProfile DN");
-#endif
   /* Dump each profiles */
   list_item_t *item;
   profile_config_t *p;
@@ -442,7 +439,6 @@ config_dump( config_t *c){
     STRPRINT_IFSET(p->groupdn,"\tGroupDN");
     STRPRINT_IFSET(p->group_search_filter, "\tGroup Search Filter");
     STRPRINT_IFSET(p->member_attribute,"\tMember Attribute");
-    STRPRINT_IFSET(p->profiledn,"\tProfile DN");
     fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(p->enable_pf));
     fprintf( stderr, "\tDefault PF rules:\t%s\n", p->default_pf_rules ? p->default_pf_rules : "Undefined" );
 #ifdef ENABLE_LDAPUSERCONF
@@ -467,6 +463,27 @@ config_is_pf_enabled( config_t *c ){
   return enabled;
 }
 int
-config_is_pf_enabled_for_profile( config_t *c, profile_config_t *p ){
+config_is_pf_enabled_for_profile( profile_config_t *p ){
   return p->enable_pf == TERN_TRUE; 
+}
+
+int
+config_is_redirect_gw_enabled( config_t *c ){
+  int enabled = 0;
+  list_item_t *item;
+  profile_config_t *pc = NULL;
+
+  for( item = list_first( c->profiles ); item; item = item->next ){
+    pc = item->data;
+    if( pc->redirect_gateway_prefix != NULL ){
+      enabled = 1;
+      break;
+    }
+  }
+  return enabled;
+}
+
+int
+config_is_redirect_gw_enabled_for_profile( profile_config_t *p ){
+  return p->redirect_gateway_prefix != NULL;
 }
