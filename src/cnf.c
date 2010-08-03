@@ -64,7 +64,7 @@ config_set_default( config_t *c){
 #endif
 #ifdef OTLS_CACERTFILE
   STRDUP_IFNOTSET(c->ldap->tls_cacertfile, OTLS_CACERTFILE );
-#endif 
+#endif
 #ifdef OTLS_CACERTDIR
   STRDUP_IFNOTSET(c->ldap->tls_cacertdir, OTLS_CACERTDIR );
 #endif
@@ -133,7 +133,7 @@ ldap_config_dup( const ldap_config_t *c ){
 
   nc->timeout = c->timeout;
 
-  return nc; 
+  return nc;
 }
 
 /**
@@ -464,7 +464,7 @@ config_is_pf_enabled( config_t *c ){
 }
 int
 config_is_pf_enabled_for_profile( profile_config_t *p ){
-  return p->enable_pf == TERN_TRUE; 
+  return p->enable_pf == TERN_TRUE;
 }
 
 int

@@ -84,8 +84,8 @@ auth_context_free( auth_context_t *a ){
 auth_context_t *
 auth_context_new( void ){
   auth_context_t *a = NULL;
-  a = la_malloc( sizeof( auth_context_t ) ); 
-  if( a ) la_memset( a, 0, sizeof( auth_context_t ) );  
+  a = la_malloc( sizeof( auth_context_t ) );
+  if( a ) la_memset( a, 0, sizeof( auth_context_t ) );
   return a;
 }
 
@@ -494,7 +494,7 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, client_context_
     return 1;
   }
   config = ldap_context->config;
-  
+
   /* initialise timeout values */
   la_ldap_set_timeout( config, &timeout);
   if( userdn && p->group_search_filter && p->member_attribute ){
@@ -537,7 +537,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
   ldap = connect_ldap( l );
   if( ldap == NULL ){
     LOGERROR( "Could not connect to URI %s\n", config->ldap->uri );
-    goto la_ldap_handle_authentication_exit;        
+    goto la_ldap_handle_authentication_exit;
   }
   /* bind to LDAP server anonymous or authenticated */
   rc = ldap_binddn( ldap, config->ldap->binddn, config->ldap->bindpw );
@@ -560,7 +560,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
     LOGWARNING( "LDAP user *%s* was not found \n", auth_context->username );
     goto la_ldap_handle_authentication_free;
   }
-  
+
   if (auth_context && l->config ){
       if (auth_context->username && strlen (auth_context->username) > 0 && auth_context->password){
       if (DODEBUG (l->verb)) {
@@ -606,7 +606,7 @@ la_ldap_handle_authentication_free:
   if( userdn ) free( userdn );
 
 la_ldap_handle_authentication_exit:
-  
+
   return res;
 
 }

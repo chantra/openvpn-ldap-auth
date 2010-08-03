@@ -45,7 +45,7 @@ typedef struct ldap_context
 
 
 /**
- * Data to be passed to a 
+ * Data to be passed to a
  * thread for user authentication
  */
 typedef struct auth_context
@@ -56,7 +56,7 @@ typedef struct auth_context
   char            *pf_file;
 } auth_context_t;
 
-/** 
+/**
  * Allocate Authentication context resources
  */
 extern auth_context_t * auth_context_new( void );

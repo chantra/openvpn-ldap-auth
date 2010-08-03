@@ -158,7 +158,7 @@ char *get_passwd( const char *prompt ){
 	if( prompt ) fprintf( stdout, "%s", prompt );
 	while( ( c = getc( stdin )) != '\n' ){
 		if( c == BACKSPACE ){
-			/* never happens as getc only read once \n is entered */ 
+			/* never happens as getc only read once \n is entered */
 			if( size > 0 ) size--;
 		}else{
 			size ++;

@@ -28,7 +28,7 @@ action_new( )
   action_t *a = NULL;
   a = la_malloc( sizeof( action_t ) );
   if( a ){
-    la_memset( a, 0, sizeof( action_t ) ); 
+    la_memset( a, 0, sizeof( action_t ) );
   }
   return a;
 }

@@ -22,7 +22,7 @@
 
 #ifndef _TYPES_H_
 #define _TYPES_H_
- 
+
 typedef enum ternary {
   TERN_FALSE = -1,
   TERN_UNDEF = 0,

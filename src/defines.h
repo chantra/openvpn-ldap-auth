@@ -28,7 +28,7 @@
 #define OSEARCH_FILTER	"(uid=%u)"
 //#define OSEARCH_FILTER NULL
 #define OSSL          "off"
-//#define OTLS_CACERTFILE 
+//#define OTLS_CACERTFILE
 //#define OTLS_CACERTDIR
 //#define OTLS_CERTFILE
 //#define OTLS_CERTKEY
@@ -37,4 +37,3 @@
 #define OTIMEOUT  15
 
 #endif
- 

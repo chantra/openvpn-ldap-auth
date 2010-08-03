@@ -30,9 +30,9 @@ enum ldap_auth_action {
 
 typedef struct action{
   enum ldap_auth_action type;
-  void *context; 
+  void *context;
   void *client_context; /*this should not be freed, openvpn plugin call will take care of it */
-  void (*context_free_func)( void *data ); 
+  void (*context_free_func)( void *data );
 } action_t;
 
 extern action_t *action_new( void );

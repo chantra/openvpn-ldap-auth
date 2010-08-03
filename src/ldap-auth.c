@@ -5,7 +5,7 @@
  *             session authentication and key exchange,
  *             packet encryption, packet authentication, and
  *             packet compression.
- * 
+ *
  * ldap-auth.c
  * OpenVPN LDAP authentication plugin
  *
@@ -75,7 +75,7 @@ action_push( list_t *list, action_t *action)
   if( action->type == LDAP_AUTH_ACTION_QUIT )
     list_prepend( list, ( void * )action );
   else
-    list_append( list, ( void * )action ); 
+    list_append( list, ( void * )action );
   if( list_length( list ) == 1 ){
     pthread_cond_signal( &action_cond );
     LOGINFO( "Sent signal to authenticating loop\n" );
@@ -147,7 +147,7 @@ get_env (const char *name, const char *envp[])
 static void
 dump_env (const char *envp[])
 {
-  
+
   fprintf (stderr, "//START of dump_env\\\\\n");
   if (envp){
     int i;
@@ -217,7 +217,7 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
    */
   context = ldap_context_new( );
   if( !context ){
-    LOGERROR( "Failed to initialize context\n" );  
+    LOGERROR( "Failed to initialize context\n" );
     goto error;
   }
   /*
@@ -260,17 +260,17 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
 
   /**
    * Parse configuration file is -c filename is provided
-   */ 
+   */
   if( configfile ) config_parse_file( configfile, context->config );
   /**
    * Set default config values
-   */ 
+   */
   config_set_default( context->config );
 
   /*
    * Get verbosity level from environment
    */
-  
+
   /* when ldap userconf is define, we need to hook onto those callbacks */
   if( config_is_pf_enabled( context->config )){
     *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF);
@@ -289,7 +289,7 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
     context->verb = atoi (verb_string);
 
   if( DODEBUG( context->verb ) )
-      config_dump( context->config ); 
+      config_dump( context->config );
 
 
   /* set up mutex/cond */
@@ -299,7 +299,7 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
   /* start our authentication thread */
   pthread_attr_setdetachstate(&action_thread_attr, PTHREAD_CREATE_JOINABLE);
   rc = pthread_create(&action_thread, &action_thread_attr, action_thread_main_loop, context);
-  
+
   switch( rc ){
     case EAGAIN:
       LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
@@ -367,7 +367,7 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
   pthread_t tid;
   action_t *action = NULL;
 
-  
+
   config_t *config = context->config;
   int rc;
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
@@ -408,7 +408,6 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
     action->context_free_func = auth_context_free;
     action_push( context->action_list, action );
     return OPENVPN_PLUGIN_FUNC_DEFERRED;
-    
   }
   else if (type == OPENVPN_PLUGIN_ENABLE_PF){
     /* unfortunately, at this stage we dont know anything about the client
@@ -440,7 +439,7 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
         char *tmp_ccd = ccd_options;
         ccd_options = strdupf("push \"redirect-gateway %s\"\n%s",
                             cc->profile->redirect_gateway_flags ? cc->profile->redirect_gateway_flags : DFT_REDIRECT_GATEWAY_FLAGS,
-                            tmp_ccd ? tmp_ccd : ""); 
+                            tmp_ccd ? tmp_ccd : "");
         if( tmp_ccd ) la_free( tmp_ccd );
       }
     }
