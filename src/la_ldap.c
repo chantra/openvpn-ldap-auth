@@ -401,9 +401,9 @@ connect_ldap( ldap_context_t *l ){
     goto connect_ldap_error;
   }
   /* Version */
-  rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap->ldap_version));
+  rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap->version));
   if( rc != LDAP_OPT_SUCCESS ){
-    LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"\n", config->ldap->ldap_version, rc, ldap_err2string(rc) );
+    LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"\n", config->ldap->version, rc, ldap_err2string(rc) );
     goto connect_ldap_error;
   }
   /* Timeout */

@@ -43,7 +43,7 @@ typedef struct ldap_config{
   char			*binddn;
   char			*bindpw;
 
-  int				ldap_version;
+  int				version;
   int       timeout;
 
   /* TLS/SSL */

@@ -58,7 +58,7 @@ config_set_default( config_t *c){
 #ifdef OBINDPW
   STRDUP_IFNOTSET(c->ldap->bindpw, OBINDPW);
 #endif
-  if(!c->ldap->ldap_version) c->ldap->ldap_version =  OLDAP_VERSION;
+  if(!c->ldap->version) c->ldap->version =  OLDAP_VERSION;
 #ifdef OSSL
   STRDUP_IFNOTSET(c->ldap->ssl, OSSL );
 #endif
@@ -131,7 +131,7 @@ ldap_config_dup( const ldap_config_t *c ){
   if( c->uri ) nc->uri = strdup( c->uri );
   if( c->binddn ) nc->binddn = strdup( c->binddn );
   if( c->bindpw ) nc->bindpw = strdup( c->bindpw );
-  nc->ldap_version = c->ldap_version;
+  nc->version = c->version;
   if( c->ssl ) nc->ssl = strdup( c->ssl );
   if( c->tls_cacertfile ) nc->tls_cacertfile = strdup( c->tls_cacertfile );
   if( c->tls_cacertdir ) nc->tls_cacertdir = strdup( c->tls_cacertdir );
@@ -333,8 +333,8 @@ config_parse_file( const char *filename, config_t *c ){
         STRDUP_IFNOTSET(c->ldap->binddn, val );
       }else if ( !strcmp( arg, "bindpw" ) ) {
         STRDUP_IFNOTSET(c->ldap->bindpw, val );
-      }else if ( !strcmp( arg, "ldap_version" ) ){
-        if(!c->ldap->ldap_version) c->ldap->ldap_version = atoi(val);
+      }else if ( !strcmp( arg, "version" ) ){
+        if(!c->ldap->version) c->ldap->version = atoi(val);
       }else if ( !strcmp( arg, "ssl" ) ){
         STRDUP_IFNOTSET(c->ldap->ssl, val );
       }else if ( !strcmp( arg, "tls_cacertfile" ) ){
@@ -417,7 +417,7 @@ config_dump( config_t *c){
   STRPRINT_IFSET(c->ldap->uri,"\tURI");
   STRPRINT_IFSET(c->ldap->binddn,"\tBindDN");
   fprintf( stderr, "\tSSL:\t%s\n", c->ldap->ssl );
-  fprintf( stderr, "\tLDAP VERSION:\t%d\n", c->ldap->ldap_version );
+  fprintf( stderr, "\tLDAP VERSION:\t%d\n", c->ldap->version );
   fprintf( stderr, "\tLDAP TIMEOUT:\t%d\n", c->ldap->timeout );
 #if 0
   fprintf( stderr, "*Default Profile:*\n" );
