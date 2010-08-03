@@ -5,3 +5,9 @@ TLS:
 
 Handle the different TLS_REQCERT parameters ( never, allow, demand, try )
 
+User auth:
+----------
+handle default_pf_rules and default_profiledn when not pf_rules/profiledn are found
+default_profiledn: if user does not have a ovpnprofile dn, use this one as default
+default_pf_rules: if not pf_rules are found for user, use this one instead of default to accept all
+

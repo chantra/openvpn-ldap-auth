@@ -18,9 +18,19 @@ dnl LT_INIT
 AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_CC
 
-CFLAGS="${CFLAGS} -g -Wall -Werror -D_FILE_OFFSET_BITS=64"
-
+CFLAGS="${CFLAGS} -g -Wall -Werror"
 AC_SUBST(CFLAGS)
+
+AC_ARG_ENABLE(ldapuserconfig,
+   [  --disable-ldapuserconfig, Disable user ldap settings],
+   [LDAP_USER_CONF="$enableval"],
+   [LDAP_USER_CONF="yes"]
+)
+
+dnl enable ldapuserconfig
+if test "$LDAP_USER_CONF" = "yes"; then
+  AC_DEFINE(ENABLE_LDAPUSERCONF, 1, [Enable user ldap settings])
+fi
 
 AC_CHECK_HEADER([ldap.h],
         [AC_CHECK_LIB(ldap, [ldap_initialize])],
@@ -33,3 +43,12 @@ AC_CHECK_HEADER([pthread.h],
 AC_PROG_INSTALL
 AC_OUTPUT( Makefile src/Makefile tests/Makefile )
 
+echo "
+Configuration:
+
+   Source code location:                              ${srcdir}
+   Lib install dir:                                   ${prefix}/lib
+   Compiler:                                          ${CXX}
+
+   LDAP user conf:                                    ${LDAP_USER_CONF}
+"

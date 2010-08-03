@@ -24,7 +24,8 @@
 #define _UTILS_H_
 
 #include <stdlib.h>
-
+#include "types.h"
+#define FREE_IF_NOT_NULL(a) if (a != NULL) la_free (a)
 /* memory allocation */
 extern void *la_malloc( size_t size );
 extern void la_free( void *ptr );
@@ -37,13 +38,19 @@ extern void *la_memset( void *s, int c, size_t n );
  */
 extern char *strdupf (const char *fmt, ...);
 
+/*
+ * Same as strcat but providing a format-string
+ * returns a pointer to dest as strcat
+ */
 
+extern char *strcatf( char *dest, const char *fmt, ...);
 /*
  * Create a new string with [substr] being replaced by [replacement] in [string]
  * Returns the new string, or NULL if out of memory.
  * The caller is responsible for freeing this new string.
  */
 extern char *str_replace( const char *string, const char *substr, const char *replacement );
+extern char *str_replace_all( const char *string, const char *substr, const char *replacement );
 /*
  * Reads a password from stdin, the password is not echoed
  * to stdout

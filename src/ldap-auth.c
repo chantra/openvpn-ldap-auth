@@ -47,14 +47,18 @@
 #include <pthread.h>
 
 
+#include "config.h"
 #include "cnf.h"
 #include "utils.h"
 #include "debug.h"
 #include "action.h"
 #include "list.h"
 #include "la_ldap.h"
+#include "client_context.h"
+#include "ldap_profile.h"
 
 #define DODEBUG(verb) ((verb) >= 4)
+#define DFT_REDIRECT_GATEWAY_FLAGS "def1 bypass-dhcp"
 
 pthread_mutex_t    action_mutex;
 pthread_cond_t     action_cond;
@@ -78,6 +82,21 @@ action_push( list_t *list, action_t *action)
   }
   pthread_mutex_unlock( &action_mutex );
 }
+
+action_t *
+action_pop (list_t *l){
+  action_t *a = NULL;
+  pthread_mutex_lock (&action_mutex);
+  if (list_length (l) == 0){
+    pthread_cond_wait (&action_cond, &action_mutex);
+  }
+  /* get the action item */
+  a = list_remove_item_at (l, 0);
+  pthread_mutex_unlock (&action_mutex);
+  return a;
+}
+
+
 /*
  * Name/Value pairs for conversation function.
  * Special Values:
@@ -185,7 +204,7 @@ daemonize (const char *envp[])
 #endif
 
 OPENVPN_EXPORT openvpn_plugin_handle_t
-openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char *envp[])
+openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char *envp[], struct openvpn_plugin_string_list **return_list)
 {
 
   ldap_context_t *context;
@@ -206,32 +225,26 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
    */
   *type_mask = OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY);
 
-   while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:b:f:t:WZ" ) ) != - 1 ){
+   while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:t:WZ" ) ) != - 1 ){
     switch( rc ) {
       case 'H':
-        context->config->uri = strdup(optarg);
-        break;
-      case 'b':
-        context->config->basedn = strdup(optarg);
-        break;
-      case 'f':
-        context->config->search_filter = strdup(optarg);
+        context->config->ldap->uri = strdup(optarg);
         break;
       case 'Z':
-        context->config->ssl = strdup("start_tls");
+        context->config->ldap->ssl = strdup("start_tls");
         break;
       case 'D':
-        context->config->binddn = strdup(optarg);
+        context->config->ldap->binddn = strdup(optarg);
         break;
       case 'W':
-        context->config->bindpw = get_passwd("BindPW Password: ");
+        context->config->ldap->bindpw = get_passwd("BindPW Password: ");
         //printdebug( "Password is %s: length: %d\n", config->bindpw, strlen(config->bindpw) );
         break;
       case 'c':
         configfile = optarg;
         break;
       case 't':
-        context->config->timeout = atoi( optarg );
+        context->config->ldap->timeout = atoi( optarg );
         break;
       case '?':
         fprintf( stderr, "LDAP-AUTH: Unknown Option -%c !!\n", optopt );
@@ -258,6 +271,19 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
    * Get verbosity level from environment
    */
   
+  /* when ldap userconf is define, we need to hook onto those callbacks */
+  if( config_is_pf_enabled( context->config )){
+    *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_ENABLE_PF);
+  }
+#ifdef ENABLE_LDAPUSERCONF
+  *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2)
+                | OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_DISCONNECT);
+#else
+  if( config_is_redirect_gw_enabled( context->config ) ){
+    *type_mask |= OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_CLIENT_CONNECT_V2);
+  }
+#endif
+
   const char *verb_string = get_env ("verb", envp);
   if (verb_string)
     context->verb = atoi (verb_string);
@@ -329,7 +355,12 @@ write_to_auth_control_file( char *auth_control_file, char value )
 
 
 OPENVPN_EXPORT int
-openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const char *argv[], const char *envp[])
+openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
+                        const int type,
+                        const char *argv[],
+                        const char *envp[],
+                        void *per_client_context,
+                        struct openvpn_plugin_string_list **return_list)
 {
   ldap_context_t *context = (ldap_context_t *) handle;
   auth_context_t *auth_context = NULL;
@@ -340,12 +371,15 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
   config_t *config = context->config;
   int rc;
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
-  /* get username/password/auth_control_file from envp string array */
-  const char *username = get_env ("username", envp);
-  const char *password = get_env ("password", envp);
-  const char *auth_control_file = get_env ( "auth_control_file", envp );
 
   if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY){
+    /* get username/password/auth_control_file from envp string array */
+    const char *username = get_env ("username", envp);
+    const char *password = get_env ("password", envp);
+    const char *auth_control_file = get_env ( "auth_control_file", envp );
+    const char *pf_file = get_env ("pf_file", envp);
+
+
 
     /* required parameters check */
     if (!username){
@@ -360,6 +394,7 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
     }
     if( username ) auth_context->username = strdup( username );
     if( password ) auth_context->password = strdup( password );
+    if( pf_file ) auth_context->pf_file = strdup( pf_file );
     if( auth_control_file ) auth_context->auth_control_file = strdup( auth_control_file );
     /* If some argument were missing or could not be duplicate */
     if( !(auth_context->username && auth_context->password && auth_context->auth_control_file ) ){
@@ -369,12 +404,64 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
     action = action_new( );
     action->type = LDAP_AUTH_ACTION_AUTH;
     action->context = auth_context;
+    action->client_context = per_client_context;
     action->context_free_func = auth_context_free;
     action_push( context->action_list, action );
     return OPENVPN_PLUGIN_FUNC_DEFERRED;
     
   }
-
+  else if (type == OPENVPN_PLUGIN_ENABLE_PF){
+    /* unfortunately, at this stage we dont know anything about the client
+     * yet. Let assume it is enabled, we will define default somewhere
+     */
+    return OPENVPN_PLUGIN_FUNC_SUCCESS;
+  }else if( type == OPENVPN_PLUGIN_CLIENT_CONNECT_V2 ){
+    /* on client connect, we return conf options through return list
+     */
+    const char *username = get_env ("username", envp);
+    client_context_t *cc = per_client_context;
+    char *ccd_options = NULL;
+    /* sanity check */
+    if (!username){
+      LOGERROR("No username supplied to OpenVPN plugin");
+      return OPENVPN_PLUGIN_FUNC_ERROR;
+    }
+    if (!cc || !cc->profile){
+      LOGERROR("No profile found for user\n");
+      return OPENVPN_PLUGIN_FUNC_ERROR;
+    }
+#ifdef ENABLE_LDAPUSERCONF
+    ldap_account_t *a = cc->ldap_account;
+    ccd_options = ldap_account_get_options_to_string( cc->ldap_account );
+#endif
+    if( cc->profile->redirect_gateway_prefix && strlen( cc->profile->redirect_gateway_prefix ) > 0 ){
+      /* do the username start with prefix? */
+      if( strncmp( cc->profile->redirect_gateway_prefix, username, strlen( cc->profile->redirect_gateway_prefix ) ) == 0 ){
+        char *tmp_ccd = ccd_options;
+        ccd_options = strdupf("push \"redirect-gateway %s\"\n%s",
+                            cc->profile->redirect_gateway_flags ? cc->profile->redirect_gateway_flags : DFT_REDIRECT_GATEWAY_FLAGS,
+                            tmp_ccd ? tmp_ccd : ""); 
+        if( tmp_ccd ) la_free( tmp_ccd );
+      }
+    }
+    if( ccd_options ){
+      *return_list = la_malloc( sizeof( struct openvpn_plugin_string_list ) );
+      if( *return_list != NULL){
+        (*return_list)->next = NULL;
+        (*return_list)->name = strdup( "config" );
+        (*return_list)->value = ccd_options;
+      }
+    }
+    return OPENVPN_PLUGIN_FUNC_SUCCESS;
+  }
+#ifdef ENABLE_LDAPUSERCONF
+  else if( type == OPENVPN_PLUGIN_CLIENT_DISCONNECT ){
+    /* nothing done for now
+     * potentially, session could be logged
+     */
+    return OPENVPN_PLUGIN_FUNC_SUCCESS;
+  }
+#endif
   return res;
 }
 
@@ -442,17 +529,8 @@ action_thread_main_loop (void *c)
 
   int loop = 1;
   while( loop ){
-    pthread_mutex_lock (&action_mutex);
-    if (list_length (context->action_list) == 0){
-      pthread_cond_wait (&action_cond, &action_mutex);
-      if (DODEBUG (context->verb) ){
-        LOGINFO( "Signal received, there is some action!\n");
-      } 
-    }
-    /* get the action item */
-    action = list_remove_item_at (context->action_list, 0);
-    pthread_mutex_unlock (&action_mutex);
-    /* TODO, do some action */
+    action = action_pop(context->action_list);
+    /* handle action */
     if (action){
       switch (action->type){
         case LDAP_AUTH_ACTION_AUTH:
@@ -486,4 +564,16 @@ action_thread_main_loop (void *c)
     }
   }
   pthread_exit (NULL);
+}
+
+OPENVPN_EXPORT void *
+openvpn_plugin_client_constructor_v1( openvpn_plugin_handle_t handle){
+  client_context_t *cc = client_context_new( );
+  return (void *)cc;
+}
+
+OPENVPN_EXPORT void
+openvpn_plugin_client_destructor_v1( openvpn_plugin_handle_t handle, void *per_client_context ){
+  client_context_t *cc = per_client_context;
+  client_context_free( cc );
 }

@@ -1,0 +1,193 @@
+# 1.3.6.1.4.1.4203.666.1194
+# 1.3.6.1.4.1.4203.666.1194.5 LDAP elements 
+# 1.3.6.1.4.1.4203.666.1194.5.4 Attribute Types 
+# 1.3.6.1.4.1.4203.666.1194.5.5 Object Classes 
+
+objectIdentifier OpenVPNRoot  1.3.6.1.4.1.4203.666.1194
+objectIdentifier OpenVPNLDAP  OpenVPNRoot:5
+
+#############################################################################
+# Attribute group OIDs. e.g.: objectIdentifier Ovpn OpenVPNLDAP:4 
+#############################################################################
+objectIdentifier OvpnAttrType OpenVPNLDAP:4
+
+############################################################################# 
+# Attribute OIDs e.g.: objectIdentifier OvpnStartDate OvpnAttrType:1 
+#############################################################################
+
+objectIdentifier OvpnStartDate OvpnAttrType:1
+objectIdentifier OvpnEndDate OvpnAttrType:2
+objectIdentifier OvpnPFRulesClientDefaultAccept OvpnAttrType:3
+objectIdentifier OvpnPFRulesSubnetDefaultAccept OvpnAttrType:4
+objectIdentifier OvpnPFRulesClient OvpnAttrType:5
+objectIdentifier OvpnPFRulesSubnet OvpnAttrType:6
+objectIdentifier OvpnCCDPushOption OvpnAttrType:7
+objectIdentifier OvpnCCDPushReset OvpnAttrType:8
+objectIdentifier OvpnCCDIRoute OvpnAttrType:9
+objectIdentifier OvpnCCDIfconfigPush OvpnAttrType:10
+objectIdentifier OvpnCCDConfig OvpnAttrType:11
+objectIdentifier OvpnProfile OvpnAttrType:12
+
+#############################################################################
+# Object Class OIDs
+#############################################################################
+objectIdentifier OvpnObjectClass OpenVPNLDAP:2
+objectIdentifier OpenVPNProfile OvpnObjectClass:1
+objectIdentifier OpenVPNAccount OvpnObjectClass:2
+
+
+
+#############################################################################
+# attribute definitions
+#
+# OID (the first arg) comes from the objectIdentifier defined above
+#
+# NAME should be the same as objectIdentifier
+#
+# DESC should be the description of the attribute
+#
+# EQUALITY is the rule to use when doing a search/compare for an
+# attribute value.
+#
+# SUBSTR is the rule to use when doing a substring search (*foo*)
+#
+# SYNTAX is the syntax (i.e., type) of the attribute. We should
+# probably stick to syntaxes:
+#
+#       1.3.6.1.4.1.1466.115.121.1.15   -> directoryString (UTF-8 string)
+#       1.3.6.1.4.1.1466.115.121.1.26   -> IA5String (ASCII String)
+#       1.3.6.1.4.1.1466.115.121.1.27   -> integer (Integer value)
+#
+# SINGLE-VALUE should be present if only one instance of this
+# attribute is allowed within an entry.
+#
+# {32} is the allowed length
+#
+# e.g.:
+# 
+# attributetype ( AstExample
+#    NAME ( 'AstExample' )
+#    DESC 'Asterisk Example Attribute'
+#    EQUALITY caseIgnoreMatch
+#    SUBSTR caseIgnoreSubstringsMatch
+#    SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{32} 
+#    SINGLE-VALUE )
+#
+#############################################################################
+
+attributetype ( OvpnStartDate 
+  NAME 'OvpnStartDate'
+  DESC 'Time at which account can start loggin in' 
+  EQUALITY generalizedTimeMatch 
+  ORDERING generalizedTimeOrderingMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.24
+  SINGLE-VALUE )
+
+attributetype ( OvpnEndDate
+  NAME 'OvpnEndDate'
+  DESC 'Time at which account cannot loggin in anymore' 
+  EQUALITY generalizedTimeMatch 
+  ORDERING generalizedTimeOrderingMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.24
+  SINGLE-VALUE )
+
+attributetype ( OvpnPFRulesClientDefaultAccept
+  NAME 'OvpnPFRulesClientDefaultAccept'
+  DESC 'Default packet filtering rule for client to client access' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024}
+  SINGLE-VALUE )
+
+attributetype ( OvpnPFRulesSubnetDefaultAccept
+  NAME 'OvpnPFRulesSubnetDefaultAccept'
+  DESC 'Default packet filtering rule to access subnet' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024}
+  SINGLE-VALUE )
+
+attributetype ( OvpnPFRulesClient
+  NAME 'OvpnPFRulesClient'
+  DESC 'Packet filtering rules for client to client access' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024}
+  SINGLE-VALUE )
+
+attributetype ( OvpnPFRulesSubnet
+  NAME 'OvpnPFRulesSubnet'
+  DESC 'Packet filtering rules to access subnets' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024}
+  SINGLE-VALUE )
+
+attributetype ( OvpnCCDPushOption
+        NAME 'OvpnCCDPushOption'
+  DESC 'Options to push to client' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024} )
+
+attributetype ( OvpnCCDPushReset
+        NAME 'OvpnCCDPushReset'
+  DESC 'Dont  inherit  the  global  push  list' 
+  EQUALITY booleanMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.7
+  SINGLE-VALUE )
+
+attributetype ( OvpnCCDIRoute
+        NAME 'OvpnCCDIRoute'
+  DESC 'IRoute of the client' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024} )
+
+attributetype ( OvpnCCDIfconfigPush
+        NAME 'OvpnCCDIfconfigPush'
+  DESC 'ifconfig to push to client' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024}
+  SINGLE-VALUE )
+
+attributetype ( OvpnCCDConfig
+        NAME 'OvpnCCDConfig'
+  DESC 'location of a config file???' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024}
+  SINGLE-VALUE )
+
+attributetype ( OvpnProfile
+        NAME 'OvpnProfile'
+  DESC 'dn of a OpenVPNProfile' 
+  EQUALITY caseIgnoreMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15{1024}
+  SINGLE-VALUE )
+
+
+#############################################################################
+# Object Class definitions
+#
+# This is where to define the object classes. Object classes are used
+# to define which attribute MAY (optional) or MUST (required) belong
+# to an entry.
+#
+# Classes can be AUXILIARY or STRUCTURAL. An entry in the directory
+# must have one and only one structural class, but can have many
+# AUXILIARY classes.
+#
+#############################################################################
+
+objectClass ( OpenVPNProfile
+  NAME 'OpenVPNProfile'
+  DESC 'An OpenVPN profile definition'
+  SUP top
+  AUXILIARY
+  MAY  ( OvpnStartDate $ OvpnEndDate $ OvpnPFRulesClientDefaultAccept $
+        OvpnPFRulesSubnetDefaultAccept $ OvpnPFRulesClient $ OvpnPFRulesSubnet $
+        OvpnCCDPushOption $ OvpnCCDPushReset $ 
+        OvpnCCDIRoute $ OvpnCCDConfig ) )
+
+objectClass ( OpenVPNAccount 
+  NAME 'OpenVPNAccount'
+  DESC 'An OpenVPN account definition'
+  SUP OpenVPNProfile
+  AUXILIARY
+  MAY  ( OvpnProfile $ OvpnCCDIfconfigPush ) )
+
+

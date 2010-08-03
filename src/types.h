@@ -1,7 +1,8 @@
 /**
  * vim: tabstop=2:shiftwidth=2:softtabstop=2:expandtab
- * defines.h
- * Copyright (C) 2009 Emmanuel Bretelle <chantra@debuntu.org>
+ * types.h
+ *
+ * Copyright (C) 2010 Emmanuel Bretelle <chantra@debuntu.org>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,25 +17,33 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
  */
-#ifndef _DEFINES_H_
-#define _DEFINES_H_
 
-#define OURI						"ldap://localhost"
-#define OLDAP_VERSION  3
+#ifndef _TYPES_H_
+#define _TYPES_H_
+ 
+typedef enum ternary {
+  TERN_FALSE = -1,
+  TERN_UNDEF = 0,
+  TERN_TRUE = 1
+} ternary_t;
 
-//#define OBINDDN        NULL
-//#define OBINDPW        NULL
-#define OSEARCH_FILTER	"(uid=%u)"
-//#define OSEARCH_FILTER NULL
-#define OSSL          "off"
-//#define OTLS_CACERTFILE 
-//#define OTLS_CACERTDIR
-//#define OTLS_CERTFILE
-//#define OTLS_CERTKEY
-//#define OTLS_CIPHERSUITE
-#define OTLS_REQCERT  "never"
-#define OTIMEOUT  15
+#define ternary_to_string(x) x == TERN_FALSE ? "False" : x == TERN_UNDEF ? "Undef" : "True"
+#define string_to_ternary(x) strcasecmp(x,"true") || strcasecmp(x,"on") || strcasecmp(x,"1") ? TERN_TRUE : TERN_FALSE
+/* bool definitions */
+#ifndef bool
+#define bool int
+#endif
+
+#ifndef true
+#define true 1
+#endif
+
+#ifndef false
+#define false 0
+#endif
+
+#define BOOL_CAST(x) ((x) ? (true) : (false))
 
 #endif
- 

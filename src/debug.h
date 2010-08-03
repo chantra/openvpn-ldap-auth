@@ -48,5 +48,7 @@ void _log( const char *level, const char *fmt, ... );
 
 #define LOGINFO( fmt, args... ) _log( "INFO", fmt, ##args )
 
+#define LOGDEBUG( fmt, args... ) _log( "DEBUG", fmt, ##args )
+
 #endif /* _DEBUG_H_ */
 
