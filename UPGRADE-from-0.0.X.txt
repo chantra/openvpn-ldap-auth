@@ -1,0 +1,142 @@
+Important notes:
+
+= User config stored in LDAP
+Users configuration can now be stored in LDAP.
+the feature is enable by default but can be disabled by running:
+
+./configure --disable-ldapuserconfig
+
+If you use this feature, you ldap server must include ovpn.schema:
+in slapd.conf add:
+include         /etc/ldap/schema/ovpn.schema
+
+The schema can be found in tests/ovpn.schema.
+
+An OpenVPNAccount can have any attributes from
+OpenVPNProfile plus:
+OvpnProfile: the DN of a profile where to get default settings
+OvpnCCDIfconfigPush: to define a static IP for this user
+
+This allows to provide the same settings for many user belonging
+to the same group.
+
+An example LDAP ldif would look like:
+dn: uid=user1,ou=thirdparty,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: OpenVPNAccount
+uid: user1
+cn: user1
+userPassword:: dXNlcjE=
+sn: user1sn
+OvpnProfile: cn=default,ou=profiles,ou=openvpn,dc=example,dc=com
+OvpnCCDPushOption: route 192.168.32.0 255.255.255.0
+OvpnPFRulesClientDefaultAccept: true
+OvpnPFRulesSubnetDefaultAccept: true
+OvpnPFRulesSubnet:: KzE5Mi4xNjguMzMuMTkKLTE5Mi4xNjguMzMuMC8yNAorMTkyLjE2OC4zMi
+ 4wLzI4Ci0xOTIuMTY4LjMyLjAvMjQ=
+OvpnEndDate: 20100810100000Z
+
+dn: cn=default,ou=profiles,ou=openvpn,dc=example,dc=com
+objectClass: OpenVPNProfile
+objectClass: person
+cn: default
+sn: dummy
+OvpnCCDPushReset: TRUE
+OvpnCCDPushOption: route 192.168.33.0 255.255.255.0
+OvpnCCDPushOption: route 192.168.34.0 255.255.255.0
+OvpnStartDate: 20100728000000Z
+OvpnEndDate: 20100802100000Z
+OvpnPFRulesSubnet:: KzE5Mi4xNjguMzIuMC8yNAotMTkyLjE2OC4zMy4wLzI4CisxOTIuMTY4Lj
+ MzLjAvMjQK
+OvpnPFRulesSubnetDefaultAccept: true
+OvpnPFRulesClientDefaultAccept: false
+
+
+default profile allow users to connect from:
+28/07/2010 00:00:00 GMT until 02/08/2010 00:00:00 GMT
+global push info will be reset
+default packet filter rules to clients will drop packets, while it will accept to subnets
+The rules for subnets are base64 encoded and is equivalent to:
++192.168.32.0/24
+-192.168.33.0/28
++192.168.33.0/24
+Also, the routes 192.168.33.0/24 and 192.168.34.0/24 will be pushed.
+
+user1 inherits those settings but override some of them:
+It wont be able to connect after 10/08/2010 10:00:00 GTM instead of 02/08/2010 00:00:00 GMT
+It will also get 192.168.32.0/24 route pushed to it
+Default PF rules are overriden and are instead changed to accept packets to clients
+Its PF subnets rules are 
++192.168.33.19
+-192.168.33.0/24
++192.168.32.0/28
+-192.168.32.0/24
+
+= Multiple profiles
+
+Since 0.0.X, the config syntax has changed a little.
+Most importantly, release greater than 0.0.X support multiple profiles
+which allow defining different type of openvpn group.
+
+From now on, all information which is not related to LDAP connection details
+must be enclosed within 
+<profile>
+</profile>
+tags.
+
+== LDAP server connection details parameters
+uri=ldap://192.168.9.135
+binddn=cn=admin,dc=example,dc=com
+bindpw=secret
+version=3
+#ssl=start_tls
+ssl=off
+timeout
+
+Some more parameters exist which are ignore at the moment and might be subject
+to change, so it is not recommended you use them:
+tls_cacertfile
+tls_cacertdir
+tls_certfile
+tls_certkey
+tls_ciphersuite
+tls_reqcert
+
+== Profile parameters
+Profiles allow to define how to find users. Each profile can have different rules
+applied to it.
+
+The following parameters can be defined whithin <profile></profile> tag.
+As many profile as you like can be defined.
+The first one that can match a user will be used.
+
+Here are the parameters you can use:
+basedn
+search_filter
+search_scope
+groupdn
+group_search_filter
+member_attribute
+redirect_gateway_prefix
+redirect_gateway_flags
+enable_pf
+default_pf_rules
+
+If the plugin was compiled with ldapuserconfig support, you can also use:
+default_profiledn
+
+An example config file can be found in tests/config.conf
+
+
+= group_search_filter syntax change
+
+In 0.0.X releases, group_search_filter syntax was not needing parentheses
+and was looking like:
+group_search_filter=|(cn=vpn)(cn=sysadmins)
+
+Since 0.1.X the syntax has changed to be consistant with search_filter and
+MUST now be within parentheses.
+As such, the previous filter need to be changed to:
+group_search_filter=(|(cn=vpn)(cn=sysadmins))
+
+
