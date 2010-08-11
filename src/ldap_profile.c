@@ -380,7 +380,8 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, c
 char *
 ldap_account_get_options_to_string( ldap_account_t *account ){
 
-  uint8_t tot_size = 0;
+  /* FIXME check if total written data is not > 2^32 (max tot_size) */
+  uint32_t tot_size = 0;
   list_item_t *elem = NULL;
   char *res = NULL;
   if (account->profile->push_reset == TERN_TRUE)
