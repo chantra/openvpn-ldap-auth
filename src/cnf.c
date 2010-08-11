@@ -171,6 +171,7 @@ profile_config_new ( void ){
   profile_config_t *c = la_malloc( sizeof( profile_config_t ) );
   if( !c ) return NULL;
   la_memset (c, 0, sizeof( profile_config_t ) );
+  c->search_scope = LA_SCOPE_ONELEVEL;
   return c;
 }
 
