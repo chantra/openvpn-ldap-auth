@@ -280,6 +280,7 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, c
   LDAPMessage *e, *result;
   config_t *config = NULL;
   uint8_t is_account = 0;
+  uint8_t is_profile = 0;
   int rc;
 
   /* if a NULL value was given for account, no action is taken */
@@ -324,7 +325,11 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, c
   for( i = 0; vals[i]; i++ ){
     if( strcasecmp( vals[i]->bv_val, "OpenVPNAccount" ) == 0 ){
       is_account = 1;
-      break;
+      continue;
+    }
+    if( strcasecmp( vals[i]->bv_val, "OpenVPNProfile" ) == 0 ){
+      is_profile = 1;
+      continue;
     }
   }
   ldap_value_free_len( vals );
@@ -351,6 +356,16 @@ ldap_account_load_from_dn( ldap_context_t *ldap_context, LDAP *ldap, char *dn, c
         ldap_account_load_from_dn( ldap_context, ldap, cc->profile->default_profiledn, cc );
       }
     }
+  }else if( !is_account && !is_profile && cc->profile->default_profiledn){
+    /* if item is neither an openvpnaccount or openvpnprofile
+     * but a default profile is defined, load it
+     */
+      /* reset ld_errno */
+      int ec = LDAP_SUCCESS;
+      ldap_set_option( ldap, LDAP_OPT_ERROR_NUMBER, &ec );
+      if( cc->profile->default_profiledn ){
+        ldap_account_load_from_dn( ldap_context, ldap, cc->profile->default_profiledn, cc );
+      }
   }
   ldap_account_load_from_entry( ldap, e, account );
   ldap_msgfree( result );
