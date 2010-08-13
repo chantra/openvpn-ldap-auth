@@ -144,6 +144,7 @@ get_env (const char *name, const char *envp[])
  * Given an environmental variable name, dumps
  * the envp array values.
  */
+/*
 static void
 dump_env (const char *envp[])
 {
@@ -156,7 +157,7 @@ dump_env (const char *envp[])
   }
   fprintf (stderr, "//END of dump_env\\\\\n");
 }
-
+*/
 
 /*
  * Return the length of a string array
@@ -364,12 +365,9 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
 {
   ldap_context_t *context = (ldap_context_t *) handle;
   auth_context_t *auth_context = NULL;
-  pthread_t tid;
   action_t *action = NULL;
 
 
-  config_t *config = context->config;
-  int rc;
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
 
   if (type == OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY){
@@ -405,7 +403,7 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
     action->type = LDAP_AUTH_ACTION_AUTH;
     action->context = auth_context;
     action->client_context = per_client_context;
-    action->context_free_func = auth_context_free;
+    action->context_free_func = (void *)auth_context_free;
     action_push( context->action_list, action );
     return OPENVPN_PLUGIN_FUNC_DEFERRED;
   }
@@ -430,7 +428,6 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
       return OPENVPN_PLUGIN_FUNC_ERROR;
     }
 #ifdef ENABLE_LDAPUSERCONF
-    ldap_account_t *a = cc->ldap_account;
     ccd_options = ldap_account_get_options_to_string( cc->ldap_account );
 #endif
     if( cc->profile->redirect_gateway_prefix && strlen( cc->profile->redirect_gateway_prefix ) > 0 ){
