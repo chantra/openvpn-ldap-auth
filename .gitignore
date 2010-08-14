@@ -8,6 +8,7 @@
 *~
 openvpn-ldap-search
 m4
+config.h.in
 depcomp
 install-sh
 libtool
