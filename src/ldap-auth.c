@@ -5,7 +5,7 @@
  *             session authentication and key exchange,
  *             packet encryption, packet authentication, and
  *             packet compression.
- * 
+ *
  * ldap-auth.c
  * OpenVPN LDAP authentication plugin
  *
@@ -71,7 +71,7 @@ action_push( list_t *list, action_t *action)
   if( action->type == LDAP_AUTH_ACTION_QUIT )
     list_prepend( list, ( void * )action );
   else
-    list_append( list, ( void * )action ); 
+    list_append( list, ( void * )action );
   if( list_length( list ) == 1 ){
     pthread_cond_signal( &action_cond );
     LOGINFO( "Sent signal to authenticating loop\n" );
@@ -121,6 +121,7 @@ get_env (const char *name, const char *envp[])
   return NULL;
 }
 
+#if 0
 /*
  * Given an environmental variable name, dumps
  * the envp array values.
@@ -128,7 +129,7 @@ get_env (const char *name, const char *envp[])
 static void
 dump_env (const char *envp[])
 {
-  
+
   fprintf (stderr, "//START of dump_env\\\\\n");
   if (envp){
     int i;
@@ -137,7 +138,7 @@ dump_env (const char *envp[])
   }
   fprintf (stderr, "//END of dump_env\\\\\n");
 }
-
+#endif
 
 /*
  * Return the length of a string array
@@ -198,7 +199,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
    */
   context = ldap_context_new( );
   if( !context ){
-    LOGERROR( "Failed to initialize context\n" );  
+    LOGERROR( "Failed to initialize context\n" );
     goto error;
   }
   /*
@@ -247,23 +248,23 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
 
   /**
    * Parse configuration file is -c filename is provided
-   */ 
+   */
   if( configfile ) config_parse_file( configfile, context->config );
   /**
    * Set default config values
-   */ 
+   */
   config_set_default( context->config );
 
   /*
    * Get verbosity level from environment
    */
-  
+
   const char *verb_string = get_env ("verb", envp);
   if (verb_string)
     context->verb = atoi (verb_string);
 
   if( DODEBUG( context->verb ) )
-      config_dump( context->config ); 
+      config_dump( context->config );
 
 
   /* set up mutex/cond */
@@ -273,7 +274,7 @@ openvpn_plugin_open_v1 (unsigned int *type_mask, const char *argv[], const char 
   /* start our authentication thread */
   pthread_attr_setdetachstate(&action_thread_attr, PTHREAD_CREATE_JOINABLE);
   rc = pthread_create(&action_thread, &action_thread_attr, action_thread_main_loop, context);
-  
+
   switch( rc ){
     case EAGAIN:
       LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
@@ -333,12 +334,9 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
 {
   ldap_context_t *context = (ldap_context_t *) handle;
   auth_context_t *auth_context = NULL;
-  pthread_t tid;
   action_t *action = NULL;
 
-  
-  config_t *config = context->config;
-  int rc;
+
   int res = OPENVPN_PLUGIN_FUNC_ERROR;
   /* get username/password/auth_control_file from envp string array */
   const char *username = get_env ("username", envp);
@@ -369,10 +367,10 @@ openvpn_plugin_func_v1 (openvpn_plugin_handle_t handle, const int type, const ch
     action = action_new( );
     action->type = LDAP_AUTH_ACTION_AUTH;
     action->context = auth_context;
-    action->context_free_func = auth_context_free;
+    action->context_free_func = (void *)auth_context_free;
     action_push( context->action_list, action );
     return OPENVPN_PLUGIN_FUNC_DEFERRED;
-    
+
   }
 
   return res;
@@ -447,7 +445,7 @@ action_thread_main_loop (void *c)
       pthread_cond_wait (&action_cond, &action_mutex);
       if (DODEBUG (context->verb) ){
         LOGINFO( "Signal received, there is some action!\n");
-      } 
+      }
     }
     /* get the action item */
     action = list_remove_item_at (context->action_list, 0);
