@@ -27,5 +27,6 @@ aclocal.m4
 Makefile
 configure
 config.h
+config.h.in
 testplugin
 tools/
