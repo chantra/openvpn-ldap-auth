@@ -33,10 +33,10 @@
 #include <sys/types.h>
 #include <ctype.h>  /* isspace */
 
-#define STRPRINT_IFSET(a,prefix) if(a) fprintf(stderr, "%s:\t%s\n", prefix, a);
+#define LOGDEBUG_IFSET(a,prefix) if(a) LOGDEBUG( "%s: %s", prefix, a);
 #define STRDUP_IFNOTSET(a,b) if(!a && b) a=strdup(b);
 #define CHECK_IF_IN_PROFILE(a,b) if(!b){ \
-LOGWARNING("%s is not defined within <profile></profile>. It will be ignored\n", a);\
+LOGWARNING("%s is not defined within <profile></profile>. It will be ignored", a);\
 free( line );\
 continue;\
 }
@@ -294,7 +294,7 @@ config_parse_file( const char *filename, config_t *c ){
   profile_config_t *p = NULL;
 	fd = open( filename, O_RDONLY );
 	if( fd == -1 ){
-    LOGERROR( "Could not open file %s: (%d) %s\n", filename, errno, strerror( errno ) );
+    LOGERROR( "Could not open file %s: (%d) %s", filename, errno, strerror( errno ) );
 		return 1;
 	}
   val = NULL;
@@ -309,7 +309,7 @@ config_parse_file( const char *filename, config_t *c ){
       p = profile_config_new( );
       free(line);
       if( p == NULL ){
-        LOGERROR( "Could not allocate memory for new profile\n" );
+        LOGERROR( "Could not allocate memory for new profile" );
         rc = 1;
         break;
       }
@@ -397,7 +397,7 @@ config_parse_file( const char *filename, config_t *c ){
         STRDUP_IFNOTSET(p->default_profiledn, val );
 #endif
       }else{
-        LOGWARNING("Unrecognized option *%s=%s*\n", arg, val);
+        LOGWARNING("Unrecognized option *%s=%s*", arg, val);
       }
 
     }
@@ -422,28 +422,28 @@ config_search_scope_to_string( ldap_search_scope_t scope){
 }
 void
 config_dump( config_t *c){
-  fprintf( stderr, "Config Dump:\n*LDAP:*\n");
-  STRPRINT_IFSET(c->ldap->uri,"\tURI");
-  STRPRINT_IFSET(c->ldap->binddn,"\tBindDN");
-  fprintf( stderr, "\tSSL:\t%s\n", c->ldap->ssl );
-  fprintf( stderr, "\tLDAP VERSION:\t%d\n", c->ldap->version );
-  fprintf( stderr, "\tLDAP TIMEOUT:\t%d\n", c->ldap->timeout );
+  LOGDEBUG( "Config Dump: *LDAP:*");
+  LOGDEBUG_IFSET(c->ldap->uri,"  URI");
+  LOGDEBUG_IFSET(c->ldap->binddn,"  BindDN");
+  LOGDEBUG( "  SSL: %s", c->ldap->ssl );
+  LOGDEBUG( "  LDAP VERSION: %d", c->ldap->version );
+  LOGDEBUG( "  LDAP TIMEOUT: %d", c->ldap->timeout );
   /* Dump each profiles */
   list_item_t *item;
   profile_config_t *p;
   for( item = list_first( c->profiles ); item; item = item->next){
     p = item->data;
-    fprintf( stderr, "*Custom Profile:*\n" );
-    STRPRINT_IFSET(p->basedn, "\tBaseDN");
-    fprintf( stderr, "\tSearch Scope:\t%s\n", config_search_scope_to_string( p->search_scope ) );
-    fprintf( stderr, "\tSearch filter:\t%s\n", p->search_filter );
-    STRPRINT_IFSET(p->groupdn,"\tGroupDN");
-    STRPRINT_IFSET(p->group_search_filter, "\tGroup Search Filter");
-    STRPRINT_IFSET(p->member_attribute,"\tMember Attribute");
-    fprintf( stderr, "\tEnable PF:\t%s\n", ternary_to_string(p->enable_pf));
-    fprintf( stderr, "\tDefault PF rules:\t%s\n", p->default_pf_rules ? p->default_pf_rules : "Undefined" );
+    LOGDEBUG( "*Custom Profile:*" );
+    LOGDEBUG_IFSET(p->basedn, "  BaseDN");
+    LOGDEBUG( "  Search Scope: %s", config_search_scope_to_string( p->search_scope ) );
+    LOGDEBUG( "  Search filter: %s", p->search_filter );
+    LOGDEBUG_IFSET(p->groupdn,"  GroupDN");
+    LOGDEBUG_IFSET(p->group_search_filter, "  Group Search Filter");
+    LOGDEBUG_IFSET(p->member_attribute,"  Member Attribute");
+    LOGDEBUG( "  Enable PF: %s", ternary_to_string(p->enable_pf));
+    LOGDEBUG( "  Default PF rules: %s", p->default_pf_rules ? p->default_pf_rules : "Undefined" );
 #ifdef ENABLE_LDAPUSERCONF
-    fprintf( stderr, "\tDefault Profile DN:\t%s\n", p->default_profiledn ? p->default_profiledn : "Undefined" );
+    LOGDEBUG( "  Default Profile DN: %s", p->default_profiledn ? p->default_profiledn : "Undefined" );
 #endif
 
   }

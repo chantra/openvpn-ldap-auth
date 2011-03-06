@@ -19,8 +19,6 @@
  *
  */
 
-#define DODEBUG(verb) ((verb) >= 4)
-
 #include <ldap.h>
 #include <errno.h>
 #include <openvpn/openvpn-plugin.h>
@@ -170,7 +168,7 @@ la_ldap_generate_pf_rules( ldap_profile_t *lp ){
       lp->pf_client_rules ? lp->pf_client_rules : "",
       la_ldap_default_rule_to_string( lp->pf_subnet_default_accept ),
       lp->pf_subnet_rules ? lp->pf_subnet_rules : "" );
-  LOGDEBUG("pf_rules = %s\n", res);
+  LOGDEBUG("pf_rules = %s", res);
   return res;
 }
 #endif
@@ -180,27 +178,27 @@ la_ldap_write_to_pf_file( char *pf_file, char *value )
 {
   int fd, rc = 0;
   if( pf_file == NULL ){
-    LOGERROR( "pf_file is null\n");
+    LOGERROR( "pf_file is null");
     return 1;
   }
 
   fd = open( pf_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU );
   if( fd == -1 ){
-    LOGERROR( "Could not open file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+    LOGERROR( "Could not open file %s: (%d) %s", pf_file, errno, strerror( errno ) );
     return 1;
   }
   rc = write( fd, value, strlen(value) );
   if( rc == -1 ){
-    LOGERROR( "Could not write value %s to  file %s: (%d) %s\n", value, pf_file, errno, strerror( errno ) );
+    LOGERROR( "Could not write value %s to  file %s: (%d) %s", value, pf_file, errno, strerror( errno ) );
     rc = 1;
   }else if( rc !=strlen(value) ){
-    LOGERROR( "Could not write all of  %s to file %s\n", value, pf_file );
+    LOGERROR( "Could not write all of  %s to file %s", value, pf_file );
     rc = 1;
   }else{
     rc = 0;
   }
   if( close( fd ) != 0 ){
-    LOGERROR( "Could not close file %s: (%d) %s\n", pf_file, errno, strerror( errno ) );
+    LOGERROR( "Could not close file %s: (%d) %s", pf_file, errno, strerror( errno ) );
   }
   return rc;
 }
@@ -217,11 +215,11 @@ la_ldap_handle_pf_file(config_t *c, client_context_t *cc, char *pf_file){
   int rc = 0;
 
   /* check if pf is enabled */
-  LOGDEBUG("PF enable for this profile: %s\n",
+  LOGDEBUG("PF enable for this profile: %s",
         p->enable_pf == TERN_TRUE ? "TRUE" : "FALSE" );
   /* write to pf_file */
   if( pf_file == NULL && config_is_pf_enabled(c) ){
-    LOGERROR("PF is enabled but environment pf_file variable is NULL.\n");
+    LOGERROR("PF is enabled but environment pf_file variable is NULL.");
     return 1;
   }else if( pf_file ){
     if( p->enable_pf == TERN_TRUE ){
@@ -235,17 +233,17 @@ la_ldap_handle_pf_file(config_t *c, client_context_t *cc, char *pf_file){
         char *pf_rules = NULL;
         pf_rules = la_ldap_generate_pf_rules( lp );
         if( pf_rules ){
-          LOGDEBUG("Using PF rules from ldap backend\n");
+          LOGDEBUG("Using PF rules from ldap backend");
           rc = la_ldap_write_to_pf_file( pf_file, pf_rules );
           la_free( pf_rules );
         }else{
-          LOGERROR("ldap_profile_handle_pf_file: could not generate pf_rules\n");
+          LOGERROR("ldap_profile_handle_pf_file: could not generate pf_rules");
           return 1;
         }
       }else
 #endif
       if( p->default_pf_rules ){
-        LOGDEBUG("Using default PF rules from config\n");
+        LOGDEBUG("Using default PF rules from config");
         char *rules = str_replace_all( p->default_pf_rules, "\\n", "\n" );
         int res = la_ldap_write_to_pf_file( pf_file, rules );
         if( rules ) la_free( rules );
@@ -257,12 +255,12 @@ la_ldap_handle_pf_file(config_t *c, client_context_t *cc, char *pf_file){
          * is not defined, we default to openvpn standard behaviour:
          * allow everything
          */
-        LOGDEBUG("No PF rules found, default to accept all\n");
+        LOGDEBUG("No PF rules found, default to accept all");
         return la_ldap_write_to_pf_file( pf_file, PF_ALLOW_ALL);
       }
     }else{
         /* profile has PF disabled */
-        LOGDEBUG("PF rules disabled for this profile, default to accept all\n");
+        LOGDEBUG("PF rules disabled for this profile, default to accept all");
         return la_ldap_write_to_pf_file( pf_file, PF_ALLOW_ALL );
     }
   }
@@ -308,29 +306,30 @@ ldap_find_user_for_profile( LDAP *ldap, ldap_context_t *ldap_context, const char
   if( real_username ) la_free( real_username );
 
   if( DODEBUG( ldap_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s and scope %s\n", search_filter, p->basedn, la_ldap_ldap_scope_to_string( p->search_scope ) );
+    LOGDEBUG( "Searching user using filter %s with basedn: %s and scope %s", search_filter, p->basedn, la_ldap_ldap_scope_to_string( p->search_scope ) );
   ldap_scope = la_ldap_config_search_scope_to_ldap( p->search_scope );
   rc = ldap_search_ext_s( ldap, p->basedn, ldap_scope, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
   if( rc == LDAP_SUCCESS ){
     /* Check how many entries were found. Only one should be returned */
     int nbrow = ldap_count_entries( ldap, result );
     if( nbrow > 1 ){
-      LOGERROR( "ldap_search_ext_s returned %d results, only 1 is supported\n", ldap_count_entries( ldap, result ) );
+      LOGERROR( "ldap_search_ext_s returned %d results, only 1 is supported", ldap_count_entries( ldap, result ) );
     }else if( nbrow == 0 ){
-      LOGWARNING( "ldap_search_ext_s: unknown user %s\n", username );
+      if( DODEBUG( ldap_context->verb ) )
+        LOGDEBUG( "ldap_search_ext_s: unknown user %s in basedn %s and scope %s", username, p->basedn, la_ldap_ldap_scope_to_string( p->search_scope ) );
     }else if( nbrow == 1 ){
       /* get the first entry (and only) */
       e =  ldap_first_entry( ldap, result );
       if( e != NULL ){
         dn = ldap_get_dn( ldap, e );
         if( DODEBUG( ldap_context->verb ) )
-          LOGINFO("found dn: %s\n", dn );
+          LOGDEBUG("found dn: %s", dn );
       }else{
-        LOGERROR( "searched returned and entry but we could not retrieve it!!!\n" );
+        LOGERROR( "searched returned and entry but we could not retrieve it!!!" );
       }
     }
   }else{
-    LOGERROR( "ldap_search_ext_s did not succeed (%d) %s\n", rc, ldap_err2string( rc ));
+    LOGERROR( "ldap_search_ext_s did not succeed (%d) %s", rc, ldap_err2string( rc ));
   }
   /* free the returned result */
   if( result != NULL ) ldap_msgfree( result );
@@ -366,7 +365,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, 
 
   /* arguments sanity check */
   if( !ldap_context || !username || !ldap){
-    LOGERROR("ldap_find_user missing required parameter\n");
+    LOGERROR("ldap_find_user missing required parameter");
     return NULL;
   }
 
@@ -384,7 +383,7 @@ ldap_find_user( LDAP *ldap, ldap_context_t *ldap_context, const char *username, 
       }
     }
   }else{
-    LOGERROR("No profiles defined. Please make sure you have a <profile></profile> section in your config.\n");
+    LOGERROR("No profiles defined. Please make sure you have a <profile></profile> section in your config.");
   }
 
   return userdn;
@@ -406,20 +405,20 @@ connect_ldap( ldap_context_t *l ){
   /* init connection to ldap */
   rc = ldap_initialize(&ldap, config->ldap->uri);
   if( rc!= LDAP_SUCCESS ){
-    LOGERROR( "ldap_initialize returned (%d) \"%s\" : %s\n", rc, ldap_err2string(rc), strerror(errno) );
+    LOGERROR( "ldap_initialize returned (%d) \"%s\" : %s", rc, ldap_err2string(rc), strerror(errno) );
     goto connect_ldap_error;
   }
   /* Version */
   rc = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &(config->ldap->version));
   if( rc != LDAP_OPT_SUCCESS ){
-    LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"\n", config->ldap->version, rc, ldap_err2string(rc) );
+    LOGERROR( "ldap_set_option version %d returned (%d) \"%s\"", config->ldap->version, rc, ldap_err2string(rc) );
     goto connect_ldap_error;
   }
   /* Timeout */
   la_ldap_set_timeout( config, &timeout);
   rc = ldap_set_option(ldap, LDAP_OPT_NETWORK_TIMEOUT, &timeout );
   if( rc != LDAP_OPT_SUCCESS ){
-    LOGERROR( "ldap_set_option timeout %ds returned (%d) \"%s\"\n", config->ldap->timeout, rc, ldap_err2string(rc) );
+    LOGERROR( "ldap_set_option timeout %ds returned (%d) \"%s\"", config->ldap->timeout, rc, ldap_err2string(rc) );
     goto connect_ldap_error;
   }
   /* SSL/TLS */
@@ -428,15 +427,15 @@ connect_ldap( ldap_context_t *l ){
     ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
     rc = ldap_set_option(ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, &ldap_tls_require_cert );
     if( rc != LDAP_OPT_SUCCESS ){
-      LOGERROR( "ldap_set_option TLS_REQ_CERT returned (%d) \"%s\"\n", rc, ldap_err2string(rc) );
+      LOGERROR( "ldap_set_option TLS_REQ_CERT returned (%d) \"%s\"", rc, ldap_err2string(rc) );
       goto connect_ldap_error;
     }
     rc = ldap_start_tls_s( ldap, NULL, NULL );
     if( rc != LDAP_SUCCESS && rc !=  LDAP_LOCAL_ERROR ){
-      LOGERROR( "ldap_start_tls_s returned (%d) \"%s\"\n", rc, ldap_err2string(rc) );
+      LOGERROR( "ldap_start_tls_s returned (%d) \"%s\"", rc, ldap_err2string(rc) );
       goto connect_ldap_error;
     }else if( rc == LDAP_LOCAL_ERROR ){
-      LOGWARNING( "ldap_start_tls_s TLS context already exist\n" );
+      LOGWARNING( "ldap_start_tls_s TLS context already exist" );
     }
   }
   return ldap;
@@ -444,7 +443,7 @@ connect_ldap( ldap_context_t *l ){
 connect_ldap_error:
   rc = ldap_unbind_ext_s( ldap, NULL, NULL );
   if( rc != LDAP_SUCCESS ){
-    LOGERROR( "ldap_unbind_ext_s returned: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
+    LOGERROR( "ldap_unbind_ext_s returned: %d/0x%2X %s", rc, rc, ldap_err2string( rc ) );
   }
   return NULL;
 }
@@ -490,7 +489,7 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, client_context_
 
   /* arguments sanity check */
   if( !ldap_context || !userdn || !ldap){
-    LOGERROR("ldap_group_membership missing required parameter\n");
+    LOGERROR("ldap_group_membership missing required parameter");
     return 1;
   }
   config = ldap_context->config;
@@ -503,17 +502,17 @@ ldap_group_membership( LDAP *ldap, ldap_context_t *ldap_context, client_context_
 
   ldap_scope = la_ldap_config_search_scope_to_ldap( p->search_scope );
   if( DODEBUG( ldap_context->verb ) )
-    LOGINFO( "Searching user using filter %s with basedn: %s and scope %s\n", search_filter, p->groupdn, la_ldap_ldap_scope_to_string( p->search_scope ) );
+    LOGDEBUG( "Searching user using filter %s with basedn: %s and scope %s", search_filter, p->groupdn, la_ldap_ldap_scope_to_string( p->search_scope ) );
 
   rc = ldap_search_ext_s( ldap, p->groupdn, ldap_scope, search_filter, attrs, 0, NULL, NULL, &timeout, 1000, &result );
   if( rc == LDAP_SUCCESS ){
     /* Check how many entries were found. Only one should be returned */
     int nbrow = ldap_count_entries( ldap, result );
     if( nbrow < 1 ){
-      LOGWARNING( "ldap_search_ext_s: user %s do not match group filter %s\n", userdn, search_filter );
+      LOGWARNING( "ldap_search_ext_s: user %s do not match group filter %s", userdn, search_filter );
     }else{
       if( DODEBUG( ldap_context->verb ) )
-        LOGINFO( "User %s matches %d groups with filter %s\n", userdn, nbrow, search_filter );
+        LOGDEBUG( "User %s matches %d groups with filter %s", userdn, nbrow, search_filter );
       res = 0;
     }
   }
@@ -536,43 +535,43 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
   /* Connection to LDAP backend */
   ldap = connect_ldap( l );
   if( ldap == NULL ){
-    LOGERROR( "Could not connect to URI %s\n", config->ldap->uri );
+    LOGERROR( "Could not connect to URI %s", config->ldap->uri );
     goto la_ldap_handle_authentication_exit;
   }
   /* bind to LDAP server anonymous or authenticated */
   rc = ldap_binddn( ldap, config->ldap->binddn, config->ldap->bindpw );
   switch( rc ){
     case LDAP_SUCCESS:
-      if( DODEBUG( l->verb ) )
-        LOGINFO( "ldap_sasl_bind_s %s success\n", config->ldap->binddn ? config->ldap->binddn : "Anonymous" );
+      if( DOINFO( l->verb ) )
+        LOGINFO( "ldap_sasl_bind_s %s success", config->ldap->binddn ? config->ldap->binddn : "Anonymous" );
         break;
     case LDAP_INVALID_CREDENTIALS:
-      LOGERROR( "ldap_binddn: Invalid Credentials\n" );
+      LOGERROR( "ldap_binddn: Invalid Credentials" );
       goto la_ldap_handle_authentication_free;
     default:
-      LOGERROR( "ldap_binddn: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
+      LOGERROR( "ldap_binddn: return value: %d/0x%2X %s", rc, rc, ldap_err2string( rc ) );
       goto la_ldap_handle_authentication_free;
   }
 
   /* find user and return userdn */
   userdn = ldap_find_user( ldap, l, auth_context->username, client_context );
   if( !userdn ){
-    LOGWARNING( "LDAP user *%s* was not found \n", auth_context->username );
+    LOGWARNING( "LDAP user *%s* was not found", auth_context->username );
     goto la_ldap_handle_authentication_free;
   }
 
   if (auth_context && l->config ){
       if (auth_context->username && strlen (auth_context->username) > 0 && auth_context->password){
-      if (DODEBUG (l->verb)) {
-          LOGINFO ("LDAP-AUTH: Authenticating Username:%s\n", auth_context->username );
+      if (DOINFO (l->verb)) {
+          LOGINFO ("LDAP-AUTH: Authenticating Username:%s", auth_context->username );
       }
       rc = ldap_binddn( ldap, userdn, auth_context->password );
       if( rc != LDAP_SUCCESS ){
-        LOGERROR( "rebinding: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
+        LOGERROR( "rebinding: return value: %d/0x%2X %s", rc, rc, ldap_err2string( rc ) );
       }else{
         /* success, let set our return value to SUCCESS */
-        if( DODEBUG( l->verb ) )
-          LOGINFO( "User *%s* successfully authenticate\n", auth_context->username );
+        if( DOINFO( l->verb ) )
+          LOGINFO( "User *%s* successfully authenticate", auth_context->username );
 #ifdef ENABLE_LDAPUSERCONF
         /* load user settings from LDAP profile */
         ldap_account_load_from_dn( l, ldap, userdn, client_context );
@@ -581,7 +580,8 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
           res = OPENVPN_PLUGIN_FUNC_ERROR;
           goto la_ldap_handle_authentication_free;
         }
-        /* ldap_account_dump( client_context->ldap_account ); */
+        if(DODEBUG(l->verb))
+          ldap_account_dump( client_context->ldap_account );
 #endif
         /* handle pf_rules if any, default value otherwise */
         la_ldap_handle_pf_file( config, client_context, auth_context->pf_file );
@@ -601,7 +601,7 @@ la_ldap_handle_authentication( ldap_context_t *l, action_t *a){
 la_ldap_handle_authentication_free:
   rc = ldap_unbind_ext_s( ldap, NULL, NULL );
   if( rc != LDAP_SUCCESS ){
-    LOGERROR( "ldap_unbind_ext_s: return value: %d/0x%2X %s\n", rc, rc, ldap_err2string( rc ) );
+    LOGERROR( "ldap_unbind_ext_s: return value: %d/0x%2X %s", rc, rc, ldap_err2string( rc ) );
   }
   if( userdn ) free( userdn );
 

@@ -24,10 +24,21 @@
 #define _DEBUG_H_
 
 
+extern char use_syslog;
 
-#define DEBUG_SQL 0
-#define DEBUG_USER 0
-#define DEBUG_MAIN 1
+#define D_EMERG 0 /* system is unusable */
+#define D_ALERT 1 /* action must be taken immediately */
+#define D_CRIT  2 /* critical conditions */
+#define D_ERR   3 /* error conditions */
+#define D_WARNING 4 /* warning conditions */
+#define D_NOTICE  5 /* normal but significant condition */
+#define D_INFO  6 /* informational */
+#define D_DEBUG 7 /* debug-level messages */
+
+#define DONOTICE(verb) ((verb) >= 4)
+#define DOINFO(verb) ((verb) >= 5)
+#define DODEBUG(verb) ((verb) >= 6)
+
 
 void _printdebug( int debug, const char *fmt, ... );
 
@@ -40,15 +51,24 @@ void _error( const char *file, int line, const char *func, const char *fmt, ... 
 void _debug( int level, const char *file, int line, const char *func, const char *fmt, ... );
 #define DEBUG( level, fmt, args... ) _debug( level, __FILE__, __LINE__, __FUNCTION__, fmt, ##args )
 
-void _log( const char *level, const char *fmt, ... );
+void _log( int level, const char *fmt, ... );
 
-#define LOGERROR( fmt, args... ) _log( "ERROR", fmt, ##args )
 
-#define LOGWARNING( fmt, args... ) _log( "WARNING", fmt, ##args )
+#define LOGEMERG( fmt, args... ) _log( D_EMERG, fmt, ##args )
 
-#define LOGINFO( fmt, args... ) _log( "INFO", fmt, ##args )
+#define LOGALERT( fmt, args... ) _log( D_ALERT, fmt, ##args )
 
-#define LOGDEBUG( fmt, args... ) _log( "DEBUG", fmt, ##args )
+#define LOGCRIT( fmt, args... ) _log( D_CRIT, fmt, ##args )
+
+#define LOGERROR( fmt, args... ) _log( D_ERR, fmt, ##args )
+
+#define LOGWARNING( fmt, args... ) _log( D_WARNING, fmt, ##args )
+
+#define LOGNOTICE( fmt, args... ) _log( D_NOTICE, fmt, ##args )
+
+#define LOGINFO( fmt, args... ) _log( D_INFO, fmt, ##args )
+
+#define LOGDEBUG( fmt, args... ) _log( D_DEBUG, fmt, ##args )
 
 #endif /* _DEBUG_H_ */
 

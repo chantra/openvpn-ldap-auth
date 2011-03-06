@@ -24,7 +24,6 @@
 
 #ifdef ENABLE_LDAPUSERCONF
 
-#define DODEBUG(verb) ((verb) >= 4)
 #include "debug.h"
 #include "utils.h"
 
@@ -70,30 +69,28 @@ ldap_profile_free( ldap_profile_t *l ){
 void
 ldap_profile_dump( ldap_profile_t *l ){
 
-  fprintf(stdout, "Account profile:\n\
-\tstart_date:\t\t%u\n\
-\tend_date:\t\t%u\n\
-\tpf_client_default_accept:\t\t%s\n\
-\tpf_subnet_default_accept:\t\t%s\n\
-\tpf_client_rules:\t\t%s\n\
-\tpf_subnet_rules:\t\t%s\n\
-\tpush_reset:\t\t%s\n\
-\tconfig:\t\t%s\n",
-    (unsigned int)l->start_date, (unsigned int)l->end_date,
-    l->pf_client_default_accept == TERN_TRUE ? "ACCEPT" : l->pf_client_default_accept == TERN_FALSE ? "DROP": "Undef",
-    l->pf_subnet_default_accept == TERN_TRUE ? "ACCEPT" : l->pf_subnet_default_accept == TERN_FALSE ? "DROP" : "Undef",
-    l->pf_client_rules ? l->pf_client_rules : "None",
-    l->pf_subnet_rules ? l->pf_subnet_rules : "None",
-    l->push_reset == TERN_TRUE ? "TRUE" : l->push_reset == TERN_FALSE ? "FALSE" : "Undef",
-    l->config ? l->config : "None");
-  fprintf( stdout, "\tpush options:\n" );
+  LOGDEBUG("Account profile:");
+  LOGDEBUG("start_date: %u", (unsigned int)l->start_date);
+  LOGDEBUG("end_date: %u", (unsigned int)l->end_date);
+  LOGDEBUG("pf_client_default_accept: %s",
+    l->pf_client_default_accept == TERN_TRUE ? "ACCEPT" :
+    l->pf_client_default_accept == TERN_FALSE ? "DROP": "Undef");
+  LOGDEBUG("pf_subnet_default_accept: %s",
+    l->pf_subnet_default_accept == TERN_TRUE ? "ACCEPT" :
+    l->pf_subnet_default_accept == TERN_FALSE ? "DROP" : "Undef");
+  LOGDEBUG("pf_client_rules: %s", l->pf_client_rules ? l->pf_client_rules : "None");
+  LOGDEBUG("pf_subnet_rules: %s", l->pf_subnet_rules ? l->pf_subnet_rules : "None");
+  LOGDEBUG("push_reset: %s",
+    l->push_reset == TERN_TRUE ? "TRUE" : l->push_reset == TERN_FALSE ? "FALSE" : "Undef");
+  LOGDEBUG("config: %s", l->config ? l->config : "None");
+  LOGDEBUG("push options:" );
   list_item_t *i;
   for(i = list_first( l->push_options ); i!=NULL; i = list_item_next( i ) ){
-    fprintf( stdout, "\t\t\t%s\n", i->data ? (char *)(i->data) : "None");
+    LOGDEBUG(" %s", i->data ? (char *)(i->data) : "None");
   }
-  fprintf( stdout, "\tiroutes:\n" );
+  LOGDEBUG("iroutes:" );
   for(i = list_first( l->iroutes ); i!=NULL; i = list_item_next( i ) ){
-    fprintf( stdout, "\t\t\t%s\n", i->data ? (char *)i->data : "None");
+    LOGDEBUG(" %s", i->data ? (char *)i->data : "None");
   }
 
 }
@@ -128,11 +125,9 @@ ldap_account_free( ldap_account_t *l){
 
 void
 ldap_account_dump( ldap_account_t *l ){
-  fprintf(stdout, "LDAP account dump:\n\
-\tifconfig_push:\t\t%s\n\
-\tprofile_dn:\t\t%s\n",
-          l->ifconfig_push ? l->ifconfig_push : "None",
-          l->profile_dn ? l->profile_dn : "None");
+  LOGDEBUG("LDAP account dump:");
+  LOGDEBUG("ifconfig_push: %s", l->ifconfig_push ? l->ifconfig_push : "None");
+  LOGDEBUG("profile_dn: %s", l->profile_dn ? l->profile_dn : "None");
   ldap_profile_dump( l->profile );
 }
 

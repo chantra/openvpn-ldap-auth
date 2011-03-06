@@ -57,7 +57,6 @@
 #include "client_context.h"
 #include "ldap_profile.h"
 
-#define DODEBUG(verb) ((verb) >= 4)
 #define DFT_REDIRECT_GATEWAY_FLAGS "def1 bypass-dhcp"
 
 pthread_mutex_t    action_mutex;
@@ -78,7 +77,7 @@ action_push( list_t *list, action_t *action)
     list_append( list, ( void * )action );
   if( list_length( list ) == 1 ){
     pthread_cond_signal( &action_cond );
-    LOGINFO( "Sent signal to authenticating loop\n" );
+    LOGINFO( "Sent signal to authenticating loop" );
   }
   pthread_mutex_unlock( &action_mutex );
 }
@@ -140,11 +139,11 @@ get_env (const char *name, const char *envp[])
   return NULL;
 }
 
+#if 0
 /*
  * Given an environmental variable name, dumps
  * the envp array values.
  */
-/*
 static void
 dump_env (const char *envp[])
 {
@@ -157,7 +156,7 @@ dump_env (const char *envp[])
   }
   fprintf (stderr, "//END of dump_env\\\\\n");
 }
-*/
+#endif
 
 /*
  * Return the length of a string array
@@ -173,52 +172,31 @@ string_array_len (const char *array[])
   return i;
 }
 
-#ifdef DO_DAEMONIZE
-
-/*
- * Daemonize if "daemon" env var is true.
- * Preserve stderr across daemonization if
- * "daemon_log_redirect" env var is true.
- */
-static void
-daemonize (const char *envp[])
-{
-  const char *daemon_string = get_env ("daemon", envp);
-  if (daemon_string && daemon_string[0] == '1')
-    {
-      const char *log_redirect = get_env ("daemon_log_redirect", envp);
-      int fd = -1;
-      if (log_redirect && log_redirect[0] == '1')
-	fd = dup (2);
-      if (daemon (0, 0) < 0)
-	{
-	  fprintf (stderr, "LDAP-AUTH: daemonization failed\n");
-	}
-      else if (fd >= 3)
-	{
-	  dup2 (fd, 2);
-	  close (fd);
-	}
-    }
-}
-
-#endif
-
 OPENVPN_EXPORT openvpn_plugin_handle_t
 openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char *envp[], struct openvpn_plugin_string_list **return_list)
 {
 
   ldap_context_t *context;
+  const char *daemon_string = NULL;
+  const char *log_redirect = NULL;
 
   const char *configfile = NULL;
   int rc = 0;
 
+  /* Are we in daemonized mode? If so, are we redirecting the logs? */
+  daemon_string = get_env ("daemon", envp);
+  use_syslog = 0;
+  if( daemon_string && daemon_string[0] == '1'){
+    log_redirect = get_env ("daemon_log_redirect", envp);
+    if( !(log_redirect && log_redirect[0] == '1'))
+      use_syslog = 1;
+  }
   /*
    * Allocate our context
    */
   context = ldap_context_new( );
   if( !context ){
-    LOGERROR( "Failed to initialize context\n" );
+    LOGERROR( "Failed to initialize ldap_context, no memory available?" );
     goto error;
   }
   /*
@@ -248,13 +226,13 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
         context->config->ldap->timeout = atoi( optarg );
         break;
       case '?':
-        fprintf( stderr, "LDAP-AUTH: Unknown Option -%c !!\n", optopt );
+        LOGERROR("Unknown Option -%c !!", optopt );
         break;
       case ':':
-        fprintf( stderr, "LDAP-AUTH: Missing argument for option -%c !!\n", optopt );
+        LOGERROR ("Missing argument for option -%c !!", optopt );
         break;
       default:
-        fprintf(stderr, "LDAP-AUTH: ?? getopt returned character code 0%o ??\n", rc);
+        LOGERROR ("?? getopt returned character code 0%o ??", rc);
         abort();
     }
   }
@@ -268,9 +246,6 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
    */
   config_set_default( context->config );
 
-  /*
-   * Get verbosity level from environment
-   */
 
   /* when ldap userconf is define, we need to hook onto those callbacks */
   if( config_is_pf_enabled( context->config )){
@@ -285,6 +260,9 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
   }
 #endif
 
+  /*
+   * Get verbosity level from environment
+   */
   const char *verb_string = get_env ("verb", envp);
   if (verb_string)
     context->verb = atoi (verb_string);
@@ -303,18 +281,18 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
 
   switch( rc ){
     case EAGAIN:
-      LOGERROR( "pthread_create returned EAGAIN: lacking resources\n" );
+      LOGERROR( "pthread_create returned EAGAIN: lacking resources" );
       break;
     case EINVAL:
-      LOGERROR( "pthread_create returned EINVAL: invalid attributes\n" );
+      LOGERROR( "pthread_create returned EINVAL: invalid attributes" );
       break;
     case EPERM:
-      LOGERROR( "pthread_create returned EPERM: no permission to create thread\n" );
+      LOGERROR( "pthread_create returned EPERM: no permission to create thread" );
       break;
     case 0:
       break;
     default:
-      LOGERROR( "pthread_create returned an unhandled value: %d\n", rc );
+      LOGERROR( "pthread_create returned an unhandled value: %d", rc );
   }
   if( rc == 0)
     return (openvpn_plugin_handle_t) context;
@@ -336,21 +314,27 @@ int
 write_to_auth_control_file( char *auth_control_file, char value )
 {
   int fd, rc;
+  int err = 0;
   fd = open( auth_control_file, O_WRONLY | O_CREAT, 0700 );
   if( fd == -1 ){
-    LOGERROR( "Could not open file %s: %s\n", auth_control_file, strerror( errno ) );
+    LOGERROR( "Could not open file auth_control_file %s: %s", auth_control_file, strerror( errno ) );
     return -1;
   }
   rc = write( fd, &value, 1 );
   if( rc == -1 ){
-    LOGERROR( "Could not write value %c to  file %s: %s\n", value, auth_control_file, strerror( errno ) );
+    LOGERROR( "Could not write value %c to auth_control_file %s: %s", value, auth_control_file, strerror( errno ) );
+    err = 1;
   }else if( rc !=1 ){
-    LOGERROR( "Could not write value %c to file %s\n", value, auth_control_file );
+    LOGERROR( "Could not write value %c to auth_control_file %s", value, auth_control_file );
+    err = 1;
   }
   rc = close( fd );
   if( rc != 0 ){
-    LOGERROR( "Could not close file %s: %s\n", auth_control_file, strerror( errno ) );
+    LOGERROR( "Could not close file auth_control_file %s: %s", auth_control_file, strerror( errno ) );
   }
+  /* Give the user a hind on why it potentially failed */
+  if( err != 0)
+    LOGERROR( "Is *tmp-dir* set up correctly in openvpn config?");
   return rc == 0;
 }
 
@@ -387,7 +371,7 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
 
     auth_context = auth_context_new( );
     if( !auth_context ){
-      LOGERROR( "Could not allocate auth_context before calling thread\n" );
+      LOGERROR( "Could not allocate auth_context before calling thread" );
       return res;
     }
     if( username ) auth_context->username = strdup( username );
@@ -424,7 +408,7 @@ openvpn_plugin_func_v2 (openvpn_plugin_handle_t handle,
       return OPENVPN_PLUGIN_FUNC_ERROR;
     }
     if (!cc || !cc->profile){
-      LOGERROR("No profile found for user\n");
+      LOGERROR("No profile found for user");
       return OPENVPN_PLUGIN_FUNC_ERROR;
     }
 #ifdef ENABLE_LDAPUSERCONF
@@ -467,16 +451,16 @@ openvpn_plugin_close_v1 (openvpn_plugin_handle_t handle)
   ldap_context_t *context = (ldap_context_t *) handle;
   action_t *action = action_new( );
 
-  if (DODEBUG (context->verb))
-    LOGINFO( "close\n" );
+  if (DOINFO (context->verb))
+    LOGINFO( "%s() called", __FUNCTION__ );
   if( action){
     action->type = LDAP_AUTH_ACTION_QUIT;
     action_push( context->action_list, action );
     if( DODEBUG( context->verb ) )
-      LOGINFO ("Waiting for thread to return\n");
+      LOGDEBUG ("Waiting for thread to return");
     pthread_join( action_thread, NULL );
     if( DODEBUG( context->verb ) )
-      LOGINFO ("Thread returned queries left in queue: %d\n", list_length( context->action_list ));
+      LOGDEBUG ("Thread returned queries left in queue: %d", list_length( context->action_list ));
     pthread_attr_destroy( &action_thread_attr );
     pthread_mutex_destroy( &action_mutex );
     pthread_cond_destroy( &action_cond );
@@ -492,16 +476,16 @@ openvpn_plugin_abort_v1 (openvpn_plugin_handle_t handle)
   if (context) {
     action_t *action = action_new( );
 
-    if (DODEBUG (context->verb))
-      LOGINFO( "close\n" );
+    if (DOINFO (context->verb))
+      LOGINFO( "%s() called", __FUNCTION__ );
     if( action){
       action->type = LDAP_AUTH_ACTION_QUIT;
       action_push( context->action_list, action );
       if( DODEBUG( context->verb ) )
-        LOGINFO ("Waiting for thread to return\n");
+        LOGDEBUG ("Waiting for thread to return");
       pthread_join( action_thread, NULL );
       if( DODEBUG( context->verb ) )
-        LOGINFO ("Thread returned queries left in queue: %d\n", list_length( context->action_list ));
+        LOGDEBUG ("Thread returned queries left in queue: %d", list_length( context->action_list ));
       pthread_attr_destroy( &action_thread_attr );
       pthread_mutex_destroy( &action_mutex );
       pthread_cond_destroy( &action_cond );
@@ -530,14 +514,14 @@ action_thread_main_loop (void *c)
     if (action){
       switch (action->type){
         case LDAP_AUTH_ACTION_AUTH:
-          if( DODEBUG(context->verb ) ){
-            LOGINFO( "Authentication requested for user %s\n",
+          if( DOINFO(context->verb ) ){
+            LOGINFO ( "Authentication requested for user %s",
                       ((auth_context_t *)action->context)->username);
           }
           rc = la_ldap_handle_authentication( context, action );
           /* we need to write the result to  auth_control_file */
           if( DODEBUG(context->verb ) ){
-            LOGINFO( "User %s: Writing %c to file %s\n",
+            LOGDEBUG( "User %s: Writing %c to auth_control_file %s",
                           ((auth_context_t *)action->context)->username,
                           rc == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0',
                           ((auth_context_t *)action->context)->auth_control_file);
@@ -546,15 +530,13 @@ action_thread_main_loop (void *c)
                                         rc == OPENVPN_PLUGIN_FUNC_SUCCESS ? '1' : '0');
           break;
         case LDAP_AUTH_ACTION_QUIT:
-          if( DODEBUG(context->verb ) ){
+          if( DOINFO(context->verb ) ){
             LOGINFO( "Authentication thread received ACTION_QUIT\n");
           }
           loop = 0;
           break;
         default:
-          if (DODEBUG (context->verb) ){
-            LOGINFO( "Unknown action %d\n", action->type);
-          }
+          LOGWARNING( "%s:%d %s() Unknown action %d", __FILE__, __LINE__, __FUNCTION__, action->type);
       }
       action_free( action );
     }

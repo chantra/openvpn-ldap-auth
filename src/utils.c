@@ -44,7 +44,7 @@ la_memset( void *s, int c, size_t n ){
 }
 
 /**
- * same as stdup but given a va_list
+ * same as strdup but given a va_list
  */
 char *
 vstrdupf (const char *fmt, va_list vargs){

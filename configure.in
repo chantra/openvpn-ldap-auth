@@ -40,6 +40,9 @@ AC_CHECK_HEADER([pthread.h],
       [AC_CHECK_LIB(pthread, [pthread_create])],
       [AC_MSG_ERROR("pthread headers not found")])
 
+AC_CHECK_HEADERS([syslog.h])
+
+
 AC_PROG_INSTALL
 AC_OUTPUT( Makefile src/Makefile tests/Makefile )
 
