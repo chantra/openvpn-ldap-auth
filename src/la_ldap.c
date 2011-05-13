@@ -402,6 +402,20 @@ connect_ldap( ldap_context_t *l ){
   int ldap_tls_require_cert;
   struct timeval timeout;
 
+  /* SSL/TLS */
+  if( strcmp( config->ldap->ssl, "start_tls" ) == 0){
+    /**
+     * TODO handle certif properly. Seems that LDAP_OPT_X_TLS_REQUIRE_CERT
+     * needs to be set up before handle initialization
+     */
+    ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
+    rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_REQUIRE_CERT, &ldap_tls_require_cert );
+    if( rc != LDAP_OPT_SUCCESS ){
+      LOGERROR( "ldap_set_option TLS_REQ_CERT returned (%d) \"%s\"", rc, ldap_err2string(rc) );
+      goto connect_ldap_error;
+    }
+  }
+
   /* init connection to ldap */
   rc = ldap_initialize(&ldap, config->ldap->uri);
   if( rc!= LDAP_SUCCESS ){
@@ -424,12 +438,15 @@ connect_ldap( ldap_context_t *l ){
   /* SSL/TLS */
   if( strcmp( config->ldap->ssl, "start_tls" ) == 0){
     /*TODO handle certif properly */
+    /**
+     * Handled earlier in code, deprecated
     ldap_tls_require_cert = LDAP_OPT_X_TLS_NEVER;
     rc = ldap_set_option(ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, &ldap_tls_require_cert );
     if( rc != LDAP_OPT_SUCCESS ){
       LOGERROR( "ldap_set_option TLS_REQ_CERT returned (%d) \"%s\"", rc, ldap_err2string(rc) );
       goto connect_ldap_error;
     }
+    */
     rc = ldap_start_tls_s( ldap, NULL, NULL );
     if( rc != LDAP_SUCCESS && rc !=  LDAP_LOCAL_ERROR ){
       LOGERROR( "ldap_start_tls_s returned (%d) \"%s\"", rc, ldap_err2string(rc) );
