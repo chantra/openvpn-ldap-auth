@@ -90,8 +90,11 @@ binddn=cn=admin,dc=example,dc=com
 bindpw=secret
 version=3
 #ssl=start_tls
+#tls_reqcert=never
 ssl=off
 timeout
+
+tls_reqcert can take the following values (default to never): never|try|allow|hard|demand
 
 Some more parameters exist which are ignore at the moment and might be subject
 to change, so it is not recommended you use them:
@@ -100,7 +103,6 @@ tls_cacertdir
 tls_certfile
 tls_certkey
 tls_ciphersuite
-tls_reqcert
 
 == Profile parameters
 Profiles allow to define how to find users. Each profile can have different rules

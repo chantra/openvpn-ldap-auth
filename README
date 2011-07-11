@@ -39,6 +39,7 @@ binddn=cn=admin,dc=example,dc=com
 bindpw=secret
 version=3
 #ssl=start_tls
+#tls_reqcert=never
 ssl=off
 groupdn=ou=roles,dc=example,dc=com
 group_search_filter=|(cn=vpn)(cn=sysadmins)
