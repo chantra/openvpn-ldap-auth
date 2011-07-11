@@ -404,7 +404,7 @@ config_parse_file( const char *filename, config_t *c ){
 		free( line );
 	}
 	close( fd );
-	return 0;
+	return rc;
 }
 
 const char *
