@@ -1,3 +1,10 @@
+version 1.0.0 undef
+  * Features:
+	  + handle TLS_REQCERT to some extend
+		+ Use LDAP backend to keep user settings
+	* Improvements:
+	  + Fallback to default config filename
+
 version 0.0.6 2010-08-03
 	* Handle *version* argument correctly
 
