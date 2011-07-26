@@ -58,6 +58,8 @@
 #include "ldap_profile.h"
 
 #define DFT_REDIRECT_GATEWAY_FLAGS "def1 bypass-dhcp"
+#define OCONFIG "/etc/openvpn/openvpn-ldap.conf"
+
 
 pthread_mutex_t    action_mutex;
 pthread_cond_t     action_cond;
@@ -239,8 +241,16 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
 
   /**
    * Parse configuration file is -c filename is provided
+   * If not provided, use a default config file OCONFIG
+   * This file must exists even though it might be empty
    */
-  if( configfile ) config_parse_file( configfile, context->config );
+  if( configfile == NULL) {
+    configfile = OCONFIG;
+  }
+
+  if( config_parse_file( configfile, context->config ) ){
+    goto error;
+  }
   /**
    * Set default config values
    */
