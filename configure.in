@@ -45,6 +45,7 @@ AC_CHECK_HEADER([pthread.h],
       [AC_MSG_ERROR("pthread headers not found")])
 
 AC_CHECK_HEADERS([syslog.h sys/resource.h ])
+AC_CHECK_FUNCS([getrlimit])
 
 
 AC_PROG_INSTALL

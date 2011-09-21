@@ -28,6 +28,7 @@
  */
 
 
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -55,7 +56,6 @@
 #include <pthread.h>
 
 
-#include "config.h"
 #include "cnf.h"
 #include "utils.h"
 #include "debug.h"
@@ -73,6 +73,7 @@ pthread_mutex_t    action_mutex;
 pthread_cond_t     action_cond;
 pthread_attr_t     action_thread_attr;
 pthread_t          action_thread = 0;
+uint8_t     allow_core_files = 0;
 
 /* forward declaration of main loop */
 static void *action_thread_main_loop (void *c);
@@ -188,7 +189,10 @@ unlimit_core_size(void)
 {
   struct rlimit lim;
 
-  getrlimit(RLIMIT_CORE, &lim);
+  if(getrlimit(RLIMIT_CORE, &lim) != 0){
+    LOGERROR("Could not get Core file size limits, err (%d): %s", errno, strerror(errno));
+    return;
+  }
   if (lim.rlim_max == 0)
   {
     LOGERROR("Cannot set core file size limit; disallowed by hard limit");
@@ -197,7 +201,11 @@ unlimit_core_size(void)
   else if (lim.rlim_max == RLIM_INFINITY || lim.rlim_cur < lim.rlim_max)
   {
     lim.rlim_cur = lim.rlim_max;
-    setrlimit(RLIMIT_CORE, &lim);
+    if (setrlimit(RLIMIT_CORE, &lim) != 0){
+      LOGERROR("Could not set RLIMIT_CORE to %lld", lim.rlim_cur);
+    }
+  }else {
+    LOGDEBUG("Limit not set, soft limit %lld, hardlimit %lld", lim.rlim_cur, lim.rlim_max);
   }
 }
 #endif
@@ -211,7 +219,6 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
   const char *log_redirect = NULL;
 
   const char *configfile = NULL;
-  uint8_t     allow_core_files = 0;
   int rc = 0;
 
   /* Are we in daemonized mode? If so, are we redirecting the logs? */
@@ -257,6 +264,7 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
         context->config->ldap->timeout = atoi( optarg );
         break;
       case 'C':
+        LOGDEBUG("Core file generation requested");
         allow_core_files = 1;
         break;
       case '?':
@@ -272,8 +280,10 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
   }
 
 #if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
-  if (allow_core_files)
+  if (allow_core_files){
+    LOGDEBUG ("Setting core file");
     unlimit_core_size();
+  }
 #endif
 
   /**
