@@ -73,7 +73,6 @@ pthread_mutex_t    action_mutex;
 pthread_cond_t     action_cond;
 pthread_attr_t     action_thread_attr;
 pthread_t          action_thread = 0;
-uint8_t     allow_core_files = 0;
 
 /* forward declaration of main loop */
 static void *action_thread_main_loop (void *c);
@@ -220,6 +219,7 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
 
   const char *configfile = NULL;
   int rc = 0;
+  uint8_t     allow_core_files = 0;
 
   /* Are we in daemonized mode? If so, are we redirecting the logs? */
   daemon_string = get_env ("daemon", envp);
