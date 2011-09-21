@@ -38,7 +38,15 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <signal.h>
+
+#ifdef HAVE_SYSLOG_H
 #include <syslog.h>
+#endif
+
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
 
 #include <openvpn/openvpn-plugin.h>
 #include <errno.h>
@@ -174,6 +182,26 @@ string_array_len (const char *array[])
   return i;
 }
 
+#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+static void
+unlimit_core_size(void)
+{
+  struct rlimit lim;
+
+  getrlimit(RLIMIT_CORE, &lim);
+  if (lim.rlim_max == 0)
+  {
+    LOGERROR("Cannot set core file size limit; disallowed by hard limit");
+    return;
+  }
+  else if (lim.rlim_max == RLIM_INFINITY || lim.rlim_cur < lim.rlim_max)
+  {
+    lim.rlim_cur = lim.rlim_max;
+    setrlimit(RLIMIT_CORE, &lim);
+  }
+}
+#endif
+
 OPENVPN_EXPORT openvpn_plugin_handle_t
 openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char *envp[], struct openvpn_plugin_string_list **return_list)
 {
@@ -183,6 +211,7 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
   const char *log_redirect = NULL;
 
   const char *configfile = NULL;
+  uint8_t     allow_core_files = 0;
   int rc = 0;
 
   /* Are we in daemonized mode? If so, are we redirecting the logs? */
@@ -206,7 +235,7 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
    */
   *type_mask = OPENVPN_PLUGIN_MASK (OPENVPN_PLUGIN_AUTH_USER_PASS_VERIFY);
 
-   while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:t:WZ" ) ) != - 1 ){
+   while ( ( rc = getopt ( string_array_len (argv), (char **)argv, ":H:D:c:t:WZC" ) ) != - 1 ){
     switch( rc ) {
       case 'H':
         context->config->ldap->uri = strdup(optarg);
@@ -227,6 +256,9 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
       case 't':
         context->config->ldap->timeout = atoi( optarg );
         break;
+      case 'C':
+        allow_core_files = 1;
+        break;
       case '?':
         LOGERROR("Unknown Option -%c !!", optopt );
         break;
@@ -238,6 +270,11 @@ openvpn_plugin_open_v2 (unsigned int *type_mask, const char *argv[], const char 
         abort();
     }
   }
+
+#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+  if (allow_core_files)
+    unlimit_core_size();
+#endif
 
   /**
    * Parse configuration file is -c filename is provided
